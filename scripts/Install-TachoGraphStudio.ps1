@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 TachoGraphStudio をインストールする（署名証明書のインポート + .appinstaller 経由の導入）。
 
@@ -17,7 +17,7 @@ param(
     [string]$Repo = "scottlz0310/tacho-graph-studio",
     # 自己昇格で再起動されたことを示す内部用スイッチ（結果確認のためウィンドウを閉じずに待機する）
     [switch]$Elevated,
-    # テスト用：テスト実行時に exit せず終了コードを出力するためのスイッチ
+    # テスト用：exit の代わりに終了コードをパイプラインへ出力する（進捗表示は Write-Host のため混入しない）
     [switch]$Test,
     # テスト用：管理者権限チェックを偽装するためのオブジェクト
     [object]$PrincipalOverride = $null,
@@ -41,10 +41,10 @@ if ($PrincipalOverride) {
 }
 
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Output "管理者権限が必要なため、UAC プロンプトで昇格して再実行します..."
+    Write-Host "管理者権限が必要なため、UAC プロンプトで昇格して再実行します..."
     try {
         if ($StartProcessOverride) {
-            $proc = &$StartProcessOverride
+            $proc = & $StartProcessOverride
         } else {
             $proc = Start-Process powershell.exe -Verb RunAs -ArgumentList @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -55,7 +55,8 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
         return
     }
     catch {
-        Write-Error "管理者権限への昇格に失敗しました: $_"
+        # $ErrorActionPreference = Stop のため Write-Error は catch 内で再スローされ exit code が返らなくなる
+        Write-Host "管理者権限への昇格に失敗しました: $_"
         Invoke-Exit 1
         return
     }
@@ -67,17 +68,21 @@ try {
     $workDir = Join-Path $env:TEMP "TachoGraphStudio-install"
     New-Item -ItemType Directory -Force $workDir | Out-Null
 
-    Write-Output "署名証明書を取得しています..."
+    Write-Host "署名証明書を取得しています..."
     $cerPath = Join-Path $workDir "TachoGraphStudio.cer"
     Invoke-WebRequest "$baseUrl/TachoGraphStudio.cer" -OutFile $cerPath
 
-    Write-Output "証明書を LocalMachine\TrustedPeople にインポートしています..."
-    $cerStore = Get-Item Cert:\LocalMachine\TrustedPeople
+    Write-Host "証明書を LocalMachine\TrustedPeople にインポートしています..."
+    # -CertStoreLocation は文字列の provider path を要求する（X509Store オブジェクト等は不可）
+    $certStorePath = "Cert:\LocalMachine\TrustedPeople"
+    if (-not (Test-Path $certStorePath)) {
+        throw "証明書ストアを解決できません: $certStorePath"
+    }
     if (-not $Test) {
-        Import-Certificate -FilePath $cerPath -CertStoreLocation $cerStore | Out-Null
+        Import-Certificate -FilePath $cerPath -CertStoreLocation $certStorePath | Out-Null
     }
 
-    Write-Output "アプリをインストールしています（.appinstaller 経由）..."
+    Write-Host "アプリをインストールしています（.appinstaller 経由）..."
     # Add-AppxPackage の -AppInstallerFile はスイッチであり、.appinstaller はローカルパスを -Path に渡す必要がある
     $appInstallerPath = Join-Path $workDir "TachoGraphStudio.appinstaller"
     Invoke-WebRequest "$baseUrl/TachoGraphStudio.appinstaller" -OutFile $appInstallerPath
@@ -85,12 +90,12 @@ try {
         Add-AppxPackage -Path $appInstallerPath -AppInstallerFile
     }
 
-    Write-Output ""
-    Write-Output "インストールが完了しました。スタートメニューから TachoGraphStudio を起動できます。"
-    Write-Output "新バージョンはアプリ起動時に自動チェックされます。"
+    Write-Host ""
+    Write-Host "インストールが完了しました。スタートメニューから TachoGraphStudio を起動できます。"
+    Write-Host "新バージョンはアプリ起動時に自動チェックされます。"
 }
 catch {
-    Write-Output "エラー: $_"
+    Write-Host "エラー: $_"
     $exitCode = 1
 }
 finally {

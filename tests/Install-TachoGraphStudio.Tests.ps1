@@ -1,4 +1,7 @@
-$scriptPath = Resolve-Path "$PSScriptRoot/../scripts/Install-TachoGraphStudio.ps1"
+# Pester 5+ ではトップレベル変数は Run フェーズの It から見えないため BeforeAll で定義する
+BeforeAll {
+    $scriptPath = (Resolve-Path "$PSScriptRoot/../scripts/Install-TachoGraphStudio.ps1").Path
+}
 
 Describe "Install-TachoGraphStudio.ps1" {
     Context "非管理者権限で実行された場合" {
