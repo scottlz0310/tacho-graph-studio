@@ -66,5 +66,5 @@ Write-Output "  SIGNING_CERTIFICATE_BASE64   = pfx-base64.txt の内容"
 Write-Output "  SIGNING_CERTIFICATE_PASSWORD = $password"
 Write-Output ""
 Write-Output "登録例:"
-Write-Output '  gh secret set SIGNING_CERTIFICATE_BASE64 < artifacts\signing\pfx-base64.txt'
+Write-Output '  Get-Content artifacts\signing\pfx-base64.txt -Raw | gh secret set SIGNING_CERTIFICATE_BASE64'
 Write-Output '  gh secret set SIGNING_CERTIFICATE_PASSWORD  # 対話入力で上記パスワードを貼り付け'
