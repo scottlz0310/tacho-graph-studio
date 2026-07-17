@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 MSIX 署名用の自己署名証明書を生成し、GitHub Secrets 登録用の値を出力する。
 
