@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    dotnet-format:
+      glob: "*.{cs,csproj,slnx,xaml,editorconfig}"
+      run: dotnet format TachoGraphStudio.slnx --verify-no-changes
