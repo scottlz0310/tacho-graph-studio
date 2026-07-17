@@ -41,6 +41,22 @@ public sealed class CachedRosterClientTests
         Assert.Equal(0, cache.ReadCount);
     }
 
+    [Fact]
+    public async Task GetRosterAsync_CacheWriteFailureIsPropagated()
+    {
+        RosterResult remoteResult = CreateResult(RosterDataSource.Remote);
+        IOException writeFailure = new("Cache write failed.");
+        StubRosterClient remoteClient = new(remoteResult);
+        StubRosterCache cache = new() { WriteException = writeFailure };
+        CachedRosterClient client = new(remoteClient, cache);
+
+        IOException exception = await Assert.ThrowsAsync<IOException>(
+            () => client.GetRosterAsync(CancellationToken.None));
+
+        Assert.Same(writeFailure, exception);
+        Assert.Equal(0, cache.ReadCount);
+    }
+
     [Theory]
     [MemberData(nameof(TransientFailures))]
     public async Task GetRosterAsync_TransientFailureReturnsCache(Exception remoteFailure)
@@ -186,6 +202,8 @@ public sealed class CachedRosterClientTests
 
         public RosterResult? WrittenRoster { get; private set; }
 
+        public Exception? WriteException { get; init; }
+
         public Task<RosterResult?> ReadAsync(CancellationToken cancellationToken = default)
         {
             ReadCount++;
@@ -196,6 +214,11 @@ public sealed class CachedRosterClientTests
 
         public Task WriteAsync(RosterResult roster, CancellationToken cancellationToken = default)
         {
+            if (WriteException is not null)
+            {
+                return Task.FromException(WriteException);
+            }
+
             WrittenRoster = roster;
             return Task.CompletedTask;
         }

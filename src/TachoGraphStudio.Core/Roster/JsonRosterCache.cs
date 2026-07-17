@@ -90,31 +90,49 @@ public sealed class JsonRosterCache : IRosterCache, IDisposable
                 Directory.CreateDirectory(directoryPath);
             }
 
-            string temporaryFilePath = _cacheFilePath + ".tmp";
-            await using (FileStream stream = new(
-                temporaryFilePath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                useAsync: true))
+            string temporaryFilePath = $"{_cacheFilePath}.{Guid.NewGuid():N}.tmp";
+            try
             {
-                RosterCacheDocument document = new()
+                await using (FileStream stream = new(
+                    temporaryFilePath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 4096,
+                    useAsync: true))
                 {
-                    Version = CurrentVersion,
-                    RetrievedAt = roster.RetrievedAt,
-                    Entries = roster.Entries.ToList(),
-                };
+                    RosterCacheDocument document = new()
+                    {
+                        Version = CurrentVersion,
+                        RetrievedAt = roster.RetrievedAt,
+                        Entries = roster.Entries.ToList(),
+                    };
 
-                await JsonSerializer.SerializeAsync(
-                    stream,
-                    document,
-                    SerializerOptions,
-                    cancellationToken);
-                await stream.FlushAsync(cancellationToken);
+                    await JsonSerializer.SerializeAsync(
+                        stream,
+                        document,
+                        SerializerOptions,
+                        cancellationToken);
+                    await stream.FlushAsync(cancellationToken);
+                }
+
+                File.Move(temporaryFilePath, _cacheFilePath, overwrite: true);
             }
+            catch (Exception writeException)
+            {
+                try
+                {
+                    File.Delete(temporaryFilePath);
+                }
+                catch (Exception cleanupException)
+                {
+                    throw new IOException(
+                        "名簿キャッシュの書き込みと一時ファイルの削除に失敗しました。",
+                        new AggregateException(writeException, cleanupException));
+                }
 
-            File.Move(temporaryFilePath, _cacheFilePath, overwrite: true);
+                throw;
+            }
         }
         finally
         {

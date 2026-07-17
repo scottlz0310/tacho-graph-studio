@@ -91,6 +91,33 @@ public sealed class JsonRosterCacheTests : IDisposable
         Assert.DoesNotContain(invalidDocument, exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task WriteAsync_MoveFailureRemovesTemporaryFile()
+    {
+        Directory.CreateDirectory(_temporaryDirectory);
+        string cachePath = Path.Combine(_temporaryDirectory, "roster.json");
+        Directory.CreateDirectory(cachePath);
+        using JsonRosterCache cache = new(cachePath);
+        RosterResult roster = new([], RosterDataSource.Remote, RetrievedAt);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => cache.WriteAsync(roster, CancellationToken.None));
+
+        Assert.Empty(Directory.EnumerateFiles(_temporaryDirectory, "roster.json.*.tmp"));
+    }
+
+    [Fact]
+    public async Task Dispose_IsIdempotentAndOperationsAfterDisposeThrow()
+    {
+        JsonRosterCache cache = new(Path.Combine(_temporaryDirectory, "roster.json"));
+
+        cache.Dispose();
+        cache.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => cache.ReadAsync(CancellationToken.None));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))
