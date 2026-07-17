@@ -15,6 +15,8 @@
 - CI（GitHub Actions: dotnet format / build / test）
 - Renovate 設定（`github>scottlz0310/renovate-config` プリセットを拡張）
 - lefthook（pre-commit で `dotnet format --verify-no-changes`）
+- MSIX + `.appinstaller` 配布パイプライン（タグ push で署名済み MSIX を GitHub Releases へ発行、self-contained でランタイム同梱）
+- 署名証明書生成スクリプト（`scripts/New-SigningCertificate.ps1`）・インストールスクリプト（`scripts/Install-TachoGraphStudio.ps1`）
 
 ### Changed
 
