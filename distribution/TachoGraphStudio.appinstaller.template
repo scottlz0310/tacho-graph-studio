@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+    Uri="https://github.com/scottlz0310/tacho-graph-studio/releases/latest/download/TachoGraphStudio.appinstaller"
+    Version="{VERSION}">
+
+  <MainPackage
+      Name="TachoGraphStudio"
+      Publisher="CN=scottlz0310"
+      Version="{VERSION}"
+      ProcessorArchitecture="x64"
+      Uri="https://github.com/scottlz0310/tacho-graph-studio/releases/download/{TAG}/TachoGraphStudio_x64.msix" />
+
+  <UpdateSettings>
+    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" />
+  </UpdateSettings>
+
+</AppInstaller>
