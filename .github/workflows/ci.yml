@@ -30,3 +30,9 @@ jobs:
 
       - name: Test
         run: dotnet test tests/TachoGraphStudio.Core.Tests -c Release --no-restore
+
+      - name: Run PowerShell Tests
+        shell: pwsh
+        run: |
+          $result = Invoke-Pester -Path tests/Install-TachoGraphStudio.Tests.ps1 -Output Detailed -PassThru
+          if ($result.FailedCount -gt 0) { exit 1 }

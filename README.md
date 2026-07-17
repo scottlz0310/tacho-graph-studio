@@ -24,7 +24,7 @@ A3 スキャン画像（PDF/JPEG）から円盤チャートを自動分割し、
 自己署名証明書を使用しているため、初回インストール時に証明書のインポートが必要（管理者権限）。
 
 1. [最新リリース](https://github.com/scottlz0310/tacho-graph-studio/releases/latest)から `Install-TachoGraphStudio.ps1` をダウンロード
-2. 内容を確認の上、管理者 PowerShell で実行:
+2. 内容を確認の上、実行（非管理者のターミナルからでも可 — UAC プロンプトで自動昇格する）:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\Install-TachoGraphStudio.ps1
