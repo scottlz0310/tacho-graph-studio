@@ -17,6 +17,7 @@
 - lefthook（pre-commit で `dotnet format --verify-no-changes`）
 - MSIX + `.appinstaller` 配布パイプライン（タグ push で署名済み MSIX を GitHub Releases へ発行、self-contained でランタイム同梱）
 - 署名証明書生成スクリプト（`scripts/New-SigningCertificate.ps1`）・インストールスクリプト（`scripts/Install-TachoGraphStudio.ps1`）
+- Supabase `machine_picklist` の読み取り専用 PostgREST クライアントとオフライン名簿キャッシュ
 
 ### Changed
 
