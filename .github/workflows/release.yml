@@ -52,7 +52,7 @@ jobs:
         shell: pwsh
         run: |
           msbuild src/TachoGraphStudio.App/TachoGraphStudio.App.csproj `
-            -t:Restore,Build -p:Configuration=Release -p:Platform=x64 `
+            -restore -t:Build -p:Configuration=Release -p:Platform=x64 `
             -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=false `
             -p:AppxPackageDir="$env:RUNNER_TEMP\appx\"
