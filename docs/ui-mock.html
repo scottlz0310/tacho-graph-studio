@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TachoGraphStudio - WinUI 3 Complete Design Core</title>
+    <style>
+        :root {
+            --bg-main: #f3f3f3;
+            --bg-card: #ffffff;
+            --border-color: #e5e5e5;
+            --text-main: #323130;
+            --text-secondary: #605e5c;
+            --accent-color: #0078d4;
+            --accent-hover: #106ebe;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            height: 95vh;
+        }
+
+        /* トップエリア：コンテキストの固定 */
+        .top-bar {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 16px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        input[type="date"], input[type="text"], select {
+            padding: 6px 10px;
+            border: 1px solid #a19f9d;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        /* メインコンテナ */
+        .main-container {
+            display: flex;
+            gap: 16px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* 左：名簿＆フィルタ */
+        .sidebar {
+            flex: 2;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .filter-bar select {
+            flex: 1;
+            padding: 4px;
+            font-size: 12px;
+        }
+
+        .grid-container {
+            flex: 1;
+            border: 1px solid var(--border-color);
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        .grid-row {
+            display: grid;
+            grid-template-columns: 60px 100px 100px 80px;
+            padding: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .grid-header {
+            background-color: #f3f2f1;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .grid-data-row { cursor: pointer; }
+        .grid-data-row:hover { background-color: #f3f2f1; }
+        .grid-data-row.selected { background-color: #deecf9; font-weight: 600; }
+
+        /* 右：メインステージ */
+        .stage {
+            flex: 3;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        /* サムネイルナビゲーション */
+        .thumb-nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            background: #faf9f8;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .thumb-item {
+            width: 50px;
+            height: 50px;
+            border: 2px solid #a19f9d;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            background: #fff;
+        }
+
+        .thumb-item.active {
+            border-color: var(--accent-color);
+            background: #deecf9;
+        }
+
+        /* プレビューエリア */
+        .preview-area {
+            flex: 1;
+            position: relative;
+            background-color: #faf9f8;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            z-index: 10;
+        }
+
+        .zoom-btn {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #a19f9d;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .tacho-canvas {
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            border: 1px solid #ccc;
+            position: relative;
+            background: radial-gradient(circle, #fff 40%, #e0e0e0 41%, #fff 45%, #ccc 70%, #fff 71%);
+            overflow: hidden;
+        }
+
+        /* 内包する回転用コンテナ画像 */
+        .tacho-disk-img {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: transform 0.05s linear;
+        }
+
+        .guide-h, .guide-v {
+            position: absolute;
+            background-color: rgba(247, 56, 56, 0.5);
+            pointer-events: none;
+            z-index: 5;
+        }
+        .guide-h { width: 100%; height: 1px; top: 50%; left: 0; }
+        .guide-v { height: 100%; width: 1px; left: 50%; top: 0; }
+
+        .overlay-text {
+            position: absolute;
+            font-size: 11px;
+            font-family: monospace;
+            font-weight: bold;
+            background: rgba(255,255,255,0.7);
+            padding: 2px;
+            pointer-events: none;
+            z-index: 6;
+        }
+
+        /* 中間：画像回転・微調整コントロール（復活） */
+        .rotation-controls {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #faf9f8;
+            padding: 10px 14px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            margin-top: 12px;
+            box-sizing: border-box;
+        }
+
+        .rotation-controls input[type="range"] {
+            flex: 1;
+            cursor: pointer;
+        }
+
+        .btn-secondary {
+            background-color: #edebe9;
+            border: 1px solid #8a8886;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover { background-color: #f3f2f1; }
+
+        /* 下部：手編集可能な文字入れ・確定エリア */
+        .meta-editor {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .input-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .field-box {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 8px 24px;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-primary:hover { background-color: var(--accent-hover); }
+    </style>
+</head>
+<body>
+
+    <!-- トップバー -->
+    <div class="top-bar">
+        <div class="control-group">
+            <label for="target-date">処理対象日:</label>
+            <input type="date" id="target-date" value="2026-12-25" onchange="syncText()">
+            
+            <label for="template-select">⚙️ チャート紙様式:</label>
+            <select id="template-select" onchange="changeTemplateLayout()">
+                <option value="yazaki">ヤザキ標準 (中央上)</option>
+                <option value="taskmeter">タスクメーター用 (右下寄り)</option>
+            </select>
+        </div>
+        <div>
+            <input type="checkbox" id="skip-text" onchange="toggleSkip()">
+            <label for="skip-text">✍️ 手書きのため自動文字入れをスキップ</label>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- 左：名簿（フィルタ付き） -->
+        <div class="sidebar">
+            <div class="filter-bar">
+                <select id="filter-company"><option>全業者</option><option>自社</option><option>外注A</option></select>
+                <select id="filter-season"><option>冬期(除雪)</option><option>夏期維持</option><option>通年</option></select>
+            </div>
+            <input type="text" style="margin-bottom: 8px;" placeholder="管理番号・運転者で検索...">
+            
+            <div class="grid-container">
+                <div class="grid-row grid-header">
+                    <div>管理</div><div>機械名</div><div>登録番号</div><div>運転者</div>
+                </div>
+                <div class="grid-row grid-data-row selected" onclick="selectRow(this, '旭川123-45', '山田 太郎')">
+                    <div>002</div><div>除雪グレーダ</div><div>旭川123-45</div><div>山田 太郎</div>
+                </div>
+                <div class="grid-row grid-data-row" onclick="selectRow(this, '旭川678-90', '佐藤 花子')">
+                    <div>005</div><div>除雪トラック</div><div>旭川678-90</div><div>佐藤 花子</div>
+                </div>
+                <div class="grid-row grid-data-row" onclick="selectRow(this, '旭川456-78', '鈴木 一郎')">
+                    <div>012</div><div>ホイールローダ</div><div>旭川456-78</div><div>鈴木 一郎</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右：ステージ -->
+        <div class="stage">
+            <!-- サムネイルナビゲーション -->
+            <div class="thumb-nav">
+                <div class="thumb-item active">No.1</div>
+                <div class="thumb-item">No.2</div>
+                <div class="thumb-item">No.3</div>
+                <div class="thumb-item">No.4</div>
+                <div class="thumb-item">---</div>
+                <div class="thumb-item">---</div>
+            </div>
+
+            <!-- プレビュー -->
+            <div class="preview-area">
+                <div class="tacho-canvas">
+                    <!-- 十字ガイドライン（画像と独立） -->
+                    <div class="guide-h"></div><div class="guide-v"></div>
+                    
+                    <!-- 回転するダミー画像 -->
+                    <div class="tacho-disk-img" id="tacho-disk" style="background: radial-gradient(circle, #fff 40%, #e0e0e0 41%, #fff 45%, #ccc 70%, #fff 71%);">
+                        <!-- 走行波形シミュレーション（画像と一緒に回転） -->
+                        <div style="position: absolute; width: 4px; height: 80px; background: rgba(0,0,0,0.4); top: 15%; left: 49%; transform: rotate(15deg); border-radius: 2px;"></div>
+                        <div style="position: absolute; width: 4px; height: 60px; background: rgba(0,0,0,0.4); top: 30%; left: 52%; transform: rotate(85deg); border-radius: 2px;"></div>
+                    </div>
+                    
+                    <!-- 自動文字入れレイヤー（画像と独立） -->
+                    <div class="overlay-text" id="overlay-text" style="top:25%; left:50%; transform:translate(-50%, -50%);"></div>
+                </div>
+                <div class="zoom-controls">
+                    <button class="zoom-btn">🔍 ＋</button>
+                    <button class="zoom-btn">🔍 ─</button>
+                    <button class="zoom-btn">⤢ 拡大</button>
+                </div>
+            </div>
+
+            <!-- 中間：画像回転・微調整コントロール（見事に復活） -->
+            <div class="rotation-controls">
+                <label for="rotate-slider" style="font-size: 13px;">🔄 角度微調整 (0時基準):</label>
+                <input type="range" id="rotate-slider" min="-180" max="180" value="0" oninput="rotateImage(this.value)">
+                <span id="angle-display" style="font-size: 13px; font-family: monospace; width: 45px; font-weight: bold; text-align: right;">0°</span>
+                <button class="btn-secondary" onclick="resetRotation()">リセット</button>
+            </div>
+
+            <!-- 下部：手編集可能なメタデータエディタ -->
+            <div class="meta-editor">
+                <div class="input-fields">
+                    <div class="field-box">
+                        <label>印字日付</label>
+                        <input type="text" id="edit-date" value="2026/12/25" oninput="updateCanvas()">
+                    </div>
+                    <div class="field-box">
+                        <label>登録番号</label>
+                        <input type="text" id="edit-car-no" value="旭川123-45" oninput="updateCanvas()">
+                    </div>
+                    <div class="field-box">
+                        <label>運転者名 (臨時手修正可)</label>
+                        <input type="text" id="edit-driver" value="山田 太郎" oninput="updateCanvas()">
+                    </div>
+                </div>
+                
+                <div class="action-bar">
+                    <div style="font-size: 12px; color: var(--text-secondary);" id="file-preview">
+                        保存先: [ローカル] 20261225_旭川123-45_山田 太郎.png
+                    </div>
+                    <button class="btn-primary" onclick="alert('透過PNGをローカルに保存しました')">確定保存して次へ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function rotateImage(val) {
+            document.getElementById('tacho-disk').style.transform = `rotate(${val}deg)`;
+            document.getElementById('angle-display').innerText = `${val}°`;
+        }
+
+        function resetRotation() {
+            document.getElementById('rotate-slider').value = 0;
+            rotateImage(0);
+        }
+
+        function selectRow(el, carNo, driver) {
+            document.querySelectorAll('.grid-data-row').forEach(r => r.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('edit-car-no').value = carNo;
+            document.getElementById('edit-driver').value = driver;
+            updateCanvas();
+        }
+
+        function syncText() {
+            const d = document.getElementById('target-date').value.replace(/-/g, '/');
+            document.getElementById('edit-date').value = d;
+            updateCanvas();
+        }
+
+        function updateCanvas() {
+            const isSkip = document.getElementById('skip-text').checked;
+            const textEl = document.getElementById('overlay-text');
+            
+            const date = document.getElementById('edit-date').value;
+            const carNo = document.getElementById('edit-car-no').value;
+            const driver = document.getElementById('edit-driver').value;
+
+            if (isSkip) {
+                textEl.style.display = 'none';
+            } else {
+                textEl.style.display = 'block';
+                textEl.innerHTML = `${date}<br>${carNo}<br>${driver}`;
+            }
+
+            const cleanDate = date.replace(/\//g, '');
+            const nameSuffix = isSkip ? "手書き" : driver;
+            document.getElementById('file-preview').innerText = `保存先: [ローカル] ${cleanDate}_${carNo}_${nameSuffix}.png`;
+        }
+
+        function toggleSkip() { updateCanvas(); }
+        
+        function changeTemplateLayout() {
+            const type = document.getElementById('template-select').value;
+            const textEl = document.getElementById('overlay-text');
+            if(type === 'yazaki') {
+                textEl.style.top = '25%'; textEl.style.left = '50%';
+            } else {
+                textEl.style.top = '65%'; textEl.style.left = '65%';
+            }
+        }
+        
+        window.onload = function() { syncText(); }
+    </script>
+</body>
+</html>
