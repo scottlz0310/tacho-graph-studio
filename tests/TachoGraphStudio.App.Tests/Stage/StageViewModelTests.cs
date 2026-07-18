@@ -3,12 +3,21 @@ using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml.Media;
 
 using TachoGraphStudio.App.Stage;
+using TachoGraphStudio.App.Tests.Templates;
 using TachoGraphStudio.Core.Imaging;
+using TachoGraphStudio.Core.Roster;
+using TachoGraphStudio.Core.Templates;
 
 namespace TachoGraphStudio.App.Tests.Stage;
 
 public sealed class StageViewModelTests
 {
+    private static StageViewModel CreateViewModel(FakeStagePipeline pipeline) => new(
+        pipeline,
+        new NullImageSourceFactory(),
+        new FakeTemplateStore(),
+        new DateOnly(2026, 7, 19));
+
     [Theory]
     [InlineData(1)]
     [InlineData(3)]
@@ -18,7 +27,7 @@ public sealed class StageViewModelTests
         {
             Discs = [.. Enumerable.Range(0, discCount).Select(BuildDisc)],
         };
-        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(pipeline);
 
         await viewModel.ImportAsync(["sheet.pdf"]);
 
@@ -43,7 +52,7 @@ public sealed class StageViewModelTests
             Discs = [BuildDisc(0)],
             ThrowAfterDiscs = new DiscSplitException("2 ページ目の分割に失敗"),
         };
-        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(pipeline);
 
         await viewModel.ImportAsync(["sheet.pdf"]);
 
@@ -61,7 +70,7 @@ public sealed class StageViewModelTests
         {
             ThrowAfterDiscs = new SheetLoadException("未対応のファイル形式"),
         };
-        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(pipeline);
 
         await viewModel.ImportAsync(["sheet.bmp"]);
 
@@ -74,7 +83,7 @@ public sealed class StageViewModelTests
     public async Task ImportAsync_SecondImportReplacesDiscsAndResetsSelection()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
-        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(pipeline);
         await viewModel.ImportAsync(["first.pdf"]);
         DiscWorkItem firstSelection = Assert.IsType<DiscWorkItem>(viewModel.SelectedDisc);
         viewModel.SelectedDisc = viewModel.Discs[1];
@@ -92,7 +101,7 @@ public sealed class StageViewModelTests
     public async Task ResetRotation_ResetsSelectedDiscOnly()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
-        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(pipeline);
         await viewModel.ImportAsync(["sheet.pdf"]);
         viewModel.Discs[0].RotationAngle = 45.0;
         viewModel.Discs[1].RotationAngle = -30.0;
@@ -107,7 +116,7 @@ public sealed class StageViewModelTests
     [Fact]
     public void ResetRotation_WithoutSelectionDoesNothing()
     {
-        StageViewModel viewModel = new(new FakeStagePipeline(), new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
 
         viewModel.ResetRotation();
 
@@ -118,7 +127,7 @@ public sealed class StageViewModelTests
     public async Task HasSelectedDisc_FollowsSelection()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
-        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(pipeline);
         Assert.False(viewModel.HasSelectedDisc);
 
         await viewModel.ImportAsync(["sheet.pdf"]);
@@ -132,7 +141,7 @@ public sealed class StageViewModelTests
     public async Task ImportAsync_EmptyPathsDoesNothing()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
-        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        StageViewModel viewModel = CreateViewModel(pipeline);
 
         await viewModel.ImportAsync([]);
 
@@ -140,6 +149,168 @@ public sealed class StageViewModelTests
         Assert.Equal(0, pipeline.ProcessCallCount);
         Assert.True(viewModel.IsEmptyStateVisible);
     }
+
+    [Fact]
+    public async Task ImportAsync_InitializesPrintDateFromTargetDate()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+
+        await viewModel.ImportAsync(["sheet.pdf"]);
+
+        Assert.All(viewModel.Discs, disc => Assert.Equal("2026/07/19", disc.Metadata.PrintDate));
+    }
+
+    [Fact]
+    public async Task TargetDateChange_SyncsPrintDateToAllDiscs()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        // 個別の手修正(FR-15)は次の一括指定までは保持される
+        viewModel.Discs[1].Metadata.PrintDate = "2026/01/01";
+
+        viewModel.TargetDate = new DateOnly(2026, 12, 25);
+
+        Assert.All(viewModel.Discs, disc => Assert.Equal("2026/12/25", disc.Metadata.PrintDate));
+    }
+
+    [Fact]
+    public async Task ApplyRosterEntry_UpdatesSelectedDiscOnly()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectedDisc = viewModel.Discs[1];
+
+        viewModel.ApplyRosterEntry(new RosterEntry
+        {
+            ControlNumber = 2,
+            Detail = "除雪グレーダ",
+            Specification = "3.7m",
+            RegistrationNumber = "旭川123-45",
+            VehicleType = "グレーダ",
+            Driver = "山田 太郎",
+            WorkPeriod = "winter",
+            UpdatedAt = DateTimeOffset.UnixEpoch,
+            IsTachoTarget = true,
+        });
+
+        DiscMetadata updated = viewModel.Discs[1].Metadata;
+        Assert.Equal("旭川123-45", updated.RegistrationNumber);
+        Assert.Equal("山田 太郎", updated.DriverName);
+        Assert.Equal("グレーダ", updated.VehicleType);
+        Assert.Equal("", viewModel.Discs[0].Metadata.RegistrationNumber);
+    }
+
+    [Fact]
+    public void ApplyRosterEntry_WithoutSelectionDoesNothing()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+
+        viewModel.ApplyRosterEntry(new RosterEntry
+        {
+            ControlNumber = 1,
+            Detail = "d",
+            Specification = "s",
+            RegistrationNumber = "r",
+            VehicleType = "v",
+            Driver = "d",
+            WorkPeriod = "winter",
+            UpdatedAt = DateTimeOffset.UnixEpoch,
+            IsTachoTarget = true,
+        });
+
+        Assert.False(viewModel.HasSelectedDisc);
+    }
+
+    [Fact]
+    public async Task LoadTemplatesAsync_PopulatesAndSelectsFirst()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.Equal(["Task-Meter", "Yazaki45"], viewModel.Templates.Select(stored => stored.Template.Name));
+        Assert.Same(viewModel.Templates[0], viewModel.SelectedTemplate);
+        Assert.False(viewModel.HasTemplateWarning);
+    }
+
+    [Fact]
+    public async Task LoadTemplatesAsync_FailuresBecomeWarning()
+    {
+        FakeTemplateStore store = new()
+        {
+            ListFailures = [new TemplateLoadFailure("broken.json", "解析できません")],
+        };
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.True(viewModel.HasTemplateWarning);
+        Assert.Contains("broken.json", viewModel.TemplateWarning, StringComparison.Ordinal);
+        Assert.Null(viewModel.SelectedTemplate);
+    }
+
+    [Fact]
+    public async Task LoadTemplatesAsync_ReloadPreservesSelectionById()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        viewModel.SelectedTemplate = viewModel.Templates[1];
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
+    }
+
+    [Fact]
+    public async Task LoadTemplatesAsync_DeletedSelectionFallsBackToFirst()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        viewModel.SelectedTemplate = viewModel.Templates[1];
+        await store.DeleteAsync("Yazaki45");
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.Equal("Task-Meter", viewModel.SelectedTemplate?.Id);
+    }
+
+    [Fact]
+    public async Task LoadTemplatesAsync_StoreFailureBecomesWarning()
+    {
+        FakeTemplateStore store = new() { NextException = new IOException("ディスクエラー") };
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.True(viewModel.HasTemplateWarning);
+        Assert.Empty(viewModel.Templates);
+    }
+
+    private static ChartTemplate BuildTemplate(string name) => new()
+    {
+        Name = name,
+        Fields = new Dictionary<string, TextFieldDefinition>
+        {
+            ["driver"] = new(),
+        },
+    };
 
     private static ProcessedDisc BuildDisc(int indexInSheet) => new(
         SourcePath: "sheet.pdf",

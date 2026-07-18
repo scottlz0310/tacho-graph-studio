@@ -18,6 +18,8 @@ using Windows.System;
 
 using WinRT.Interop;
 
+using WinUI.TableView;
+
 namespace TachoGraphStudio.App;
 
 public sealed partial class MainWindow : Window
@@ -42,14 +44,30 @@ public sealed partial class MainWindow : Window
             new JsonRosterFilterSettingsStore(
                 Path.Combine(localFolderPath, "settings", "roster-filter.json")));
 
+        FileTemplateStore templateStore = new(Path.Combine(localFolderPath, "templates"));
+
         StageViewModel = new StageViewModel(
             new StagePipeline(new SheetLoader(new WindowsPdfRasterizer())),
-            new WriteableBitmapImageSourceFactory());
+            new WriteableBitmapImageSourceFactory(),
+            templateStore);
 
-        TemplateEditorViewModel = new TemplateEditorViewModel(
-            new FileTemplateStore(Path.Combine(localFolderPath, "templates")));
+        TemplateEditorViewModel = new TemplateEditorViewModel(templateStore);
         TemplateEditor.ViewModel = TemplateEditorViewModel;
         TemplateEditor.HostWindow = this;
+
+        // 名簿の行選択・再クリックを選択中円盤のメタデータへ反映する(FR-13)。
+        // 選択変更に依存しないため、同じ行を複数の円盤へ続けて適用できる
+        RosterViewModel.EntryActivated += (_, entry) => StageViewModel.ApplyRosterEntry(entry);
+
+        // テンプレート編集を閉じたら様式一覧へ反映する(FR-16)
+        TemplateEditorViewModel.PropertyChanged += async (_, e) =>
+        {
+            if (e.PropertyName == nameof(TemplateEditorViewModel.IsOpen)
+                && !TemplateEditorViewModel.IsOpen)
+            {
+                await StageViewModel.LoadTemplatesAsync();
+            }
+        };
     }
 
     public RosterViewModel RosterViewModel { get; }
@@ -99,6 +117,7 @@ public sealed partial class MainWindow : Window
         await RosterViewModel.LoadFilterSettingsAsync();
         ApplyFilterSettingsToControls();
 
+        await StageViewModel.LoadTemplatesAsync();
         await RefreshSupabaseConnectionAsync(promptIfUnset: true);
     }
 
@@ -118,6 +137,13 @@ public sealed partial class MainWindow : Window
     private async void OnRosterRetryButtonClick(object sender, RoutedEventArgs e)
     {
         await RosterViewModel.RefreshAsync();
+    }
+
+    // 行のダブルクリックで名簿を再適用できるようにする(FR-13)。行スコープのイベントを使い、
+    // ヘッダー・空白部の操作では発火させない(手修正 FR-15 を上書きしないため)
+    private void OnRosterDataGridRowDoubleTapped(object sender, TableViewRowDoubleTappedEventArgs e)
+    {
+        RosterViewModel.ActivateEntry(e.Item);
     }
 
     private void OnSeasonComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)

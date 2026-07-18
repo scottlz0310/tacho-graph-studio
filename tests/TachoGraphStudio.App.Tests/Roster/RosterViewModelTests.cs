@@ -129,6 +129,50 @@ public sealed class RosterViewModelTests
         Assert.Single(viewModel.Entries);
     }
 
+    [Fact]
+    public void SelectedEntryChange_RaisesEntryActivated()
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        RosterEntry entry = new() { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true };
+        List<RosterEntry> activated = [];
+        viewModel.EntryActivated += (_, activatedEntry) => activated.Add(activatedEntry);
+
+        viewModel.SelectedEntry = entry;
+        viewModel.SelectedEntry = null;
+
+        Assert.Equal([entry], activated);
+    }
+
+    [Fact]
+    public void ActivateEntry_RaisesEventForSameRowItemAgain()
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        RosterEntry entry = new() { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true };
+        List<RosterEntry> activated = [];
+        viewModel.EntryActivated += (_, activatedEntry) => activated.Add(activatedEntry);
+        viewModel.SelectedEntry = entry;
+
+        // 同じ行のダブルクリック(選択変更なし)でも再適用できる(FR-13)
+        viewModel.ActivateEntry(entry);
+
+        Assert.Equal([entry, entry], activated);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("header")]
+    public void ActivateEntry_NonRowItemDoesNothing(object? item)
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        int activatedCount = 0;
+        viewModel.EntryActivated += (_, _) => activatedCount++;
+
+        // ヘッダー・空白部など名簿行以外の操作では発火しない(FR-15 の手修正を上書きしない)
+        viewModel.ActivateEntry(item);
+
+        Assert.Equal(0, activatedCount);
+    }
+
     private sealed class ThrowingFilterSettingsStore : IRosterFilterSettingsStore
     {
         private readonly Exception _readException;
