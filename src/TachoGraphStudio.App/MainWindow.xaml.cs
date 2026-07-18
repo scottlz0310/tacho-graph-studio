@@ -10,6 +10,8 @@ namespace TachoGraphStudio.App;
 
 public sealed partial class MainWindow : Window
 {
+    private readonly SupabaseCredentialsValidator _credentialsValidator;
+    private readonly HttpClient _httpClient = new();
     private readonly ISecretStore _secretStore;
 
     public MainWindow()
@@ -22,6 +24,7 @@ public sealed partial class MainWindow : Window
             "secrets",
             "supabase.secret.json");
         _secretStore = new DpapiSecretStore(secretsFilePath);
+        _credentialsValidator = new SupabaseCredentialsValidator(_httpClient);
     }
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
@@ -52,17 +55,38 @@ public sealed partial class MainWindow : Window
     private async Task OpenSettingsDialogAsync()
     {
         (SupabaseCredentials? existingCredentials, _) = await TryReadCredentialsAsync();
-        SupabaseSettingsDialog dialog = new(existingCredentials)
+        SupabaseSettingsDialog dialog = new(existingCredentials, _credentialsValidator)
         {
             XamlRoot = Content.XamlRoot,
         };
 
         ContentDialogResult result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary && dialog.Result is not null)
+        if (result != ContentDialogResult.Primary || dialog.Result is null)
         {
-            await _secretStore.WriteAsync(dialog.Result);
-            await RefreshSupabaseSettingsStateAsync(promptIfUnset: false);
+            return;
         }
+
+        bool saved = await _secretStore.TryWriteAsync(dialog.Result);
+        if (!saved)
+        {
+            await ShowSaveFailedDialogAsync();
+            return;
+        }
+
+        await RefreshSupabaseSettingsStateAsync(promptIfUnset: false);
+    }
+
+    private async Task ShowSaveFailedDialogAsync()
+    {
+        ContentDialog errorDialog = new()
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "設定の保存に失敗しました",
+            Content = "Supabase 接続設定をローカルに保存できませんでした。ディスク容量や権限をご確認のうえ、"
+                + "再度お試しください。名簿以外の機能は引き続き利用できます。",
+            CloseButtonText = "閉じる",
+        };
+        await errorDialog.ShowAsync();
     }
 
     private async Task<(SupabaseCredentials? Credentials, bool IsInvalid)> TryReadCredentialsAsync()
