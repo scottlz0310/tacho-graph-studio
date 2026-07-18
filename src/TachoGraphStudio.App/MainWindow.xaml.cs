@@ -18,6 +18,8 @@ using Windows.System;
 
 using WinRT.Interop;
 
+using WinUI.TableView;
+
 namespace TachoGraphStudio.App;
 
 public sealed partial class MainWindow : Window
@@ -137,11 +139,11 @@ public sealed partial class MainWindow : Window
         await RosterViewModel.RefreshAsync();
     }
 
-    // 選択済み行の再クリックでも名簿を再適用できるようにする(FR-13)。
-    // 選択変更時は OnSelectedEntryChanged 経由と重複するが、適用は冪等なので問題ない
-    private void OnRosterDataGridTapped(object sender, TappedRoutedEventArgs e)
+    // 行のダブルクリックで名簿を再適用できるようにする(FR-13)。行スコープのイベントを使い、
+    // ヘッダー・空白部の操作では発火させない(手修正 FR-15 を上書きしないため)
+    private void OnRosterDataGridRowDoubleTapped(object sender, TableViewRowDoubleTappedEventArgs e)
     {
-        RosterViewModel.ActivateSelectedEntry();
+        RosterViewModel.ActivateEntry(e.Item);
     }
 
     private void OnSeasonComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -35,6 +35,8 @@ public sealed class ChartTextComposerTests
     [InlineData("2026.12.25", "2026", "12", "25")]
     [InlineData("R8/12/25", "R8", "12", "25")]
     [InlineData("2026 / 12 / 25", "2026", "12", "25")]
+    [InlineData("2026 12 25", "2026", "12", "25")]
+    [InlineData(" 2026/12/25 ", "2026", "12", "25")]
     public void Compose_SplitsDateTextOnCommonSeparators(
         string dateText, string year, string month, string day)
     {

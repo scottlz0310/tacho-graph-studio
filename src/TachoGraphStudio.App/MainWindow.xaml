@@ -90,7 +90,7 @@
                             HeadersVisibility="Columns"
                             IsReadOnly="True"
                             ItemsSource="{x:Bind RosterViewModel.Entries}"
-                            Tapped="OnRosterDataGridTapped"
+                            RowDoubleTapped="OnRosterDataGridRowDoubleTapped"
                             SelectedItem="{x:Bind RosterViewModel.SelectedEntry, Mode=TwoWay}"
                             SelectionMode="Single"
                             SelectionUnit="Row"

@@ -1,10 +1,11 @@
+using System.Text.RegularExpressions;
+
 namespace TachoGraphStudio.Core.Templates;
 
 // テンプレートのフィールド名と入力値の対応付け + 配置計算(FR-16, FR-18)。
 // プレビューの文字レイヤー(#13)と確定保存の本合成(#14)が共有する
-public static class ChartTextComposer
+public static partial class ChartTextComposer
 {
-    private static readonly char[] DateSeparators = ['/', '-', '.'];
 
     // 表示対象(visible かつ値が空でない)のフィールドをキー順に返す
     public static IReadOnlyList<PlacedText> Compose(
@@ -49,12 +50,16 @@ public static class ChartTextComposer
         _ => null,
     };
 
-    // 空要素を詰めると「2026//25」の日が月へずれるため、位置を保ったまま分解し空要素は null にする
+    // 空要素を詰めると「2026//25」の日が月へずれるため、位置を保ったまま分解し空要素は null にする。
+    // 区切りは記号(前後の空白を含めて 1 区切り)または空白の連続で、「2026 12 25」も分解できる
     private static string? DatePart(string dateText, int index)
     {
-        string[] parts = dateText.Split(DateSeparators, StringSplitOptions.TrimEntries);
+        string[] parts = DateSeparatorRegex().Split(dateText.Trim());
         return index < parts.Length && parts[index].Length > 0 ? parts[index] : null;
     }
+
+    [GeneratedRegex(@"\s*[/\-.]\s*|\s+")]
+    private static partial Regex DateSeparatorRegex();
 }
 
 // 1 フィールド分の描画内容。Placement の X/Y は Definition.Align / VerticalAlign の基準点

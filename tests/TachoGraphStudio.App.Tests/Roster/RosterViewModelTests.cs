@@ -144,7 +144,7 @@ public sealed class RosterViewModelTests
     }
 
     [Fact]
-    public void ActivateSelectedEntry_RaisesEventForSameEntryAgain()
+    public void ActivateEntry_RaisesEventForSameRowItemAgain()
     {
         RosterViewModel viewModel = new(new NullFilterSettingsStore());
         RosterEntry entry = new() { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true };
@@ -152,20 +152,23 @@ public sealed class RosterViewModelTests
         viewModel.EntryActivated += (_, activatedEntry) => activated.Add(activatedEntry);
         viewModel.SelectedEntry = entry;
 
-        // 同じ行の再クリック(選択変更なし)でも再適用できる(FR-13)
-        viewModel.ActivateSelectedEntry();
+        // 同じ行のダブルクリック(選択変更なし)でも再適用できる(FR-13)
+        viewModel.ActivateEntry(entry);
 
         Assert.Equal([entry, entry], activated);
     }
 
-    [Fact]
-    public void ActivateSelectedEntry_WithoutSelectionDoesNothing()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("header")]
+    public void ActivateEntry_NonRowItemDoesNothing(object? item)
     {
         RosterViewModel viewModel = new(new NullFilterSettingsStore());
         int activatedCount = 0;
         viewModel.EntryActivated += (_, _) => activatedCount++;
 
-        viewModel.ActivateSelectedEntry();
+        // ヘッダー・空白部など名簿行以外の操作では発火しない(FR-15 の手修正を上書きしない)
+        viewModel.ActivateEntry(item);
 
         Assert.Equal(0, activatedCount);
     }
