@@ -1,10 +1,14 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 
+using TachoGraphStudio.App.Roster;
 using TachoGraphStudio.App.Settings;
+using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Settings;
 
 using Windows.Storage;
+using Windows.System;
 
 namespace TachoGraphStudio.App;
 
@@ -19,17 +23,26 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "TachoGraphStudio";
 
-        string secretsFilePath = Path.Combine(
-            ApplicationData.Current.LocalCacheFolder.Path,
-            "secrets",
-            "supabase.secret.json");
-        _secretStore = new DpapiSecretStore(secretsFilePath);
+        string localCacheFolderPath = ApplicationData.Current.LocalCacheFolder.Path;
+        string localFolderPath = ApplicationData.Current.LocalFolder.Path;
+
+        _secretStore = new DpapiSecretStore(
+            Path.Combine(localCacheFolderPath, "secrets", "supabase.secret.json"));
         _credentialsValidator = new SupabaseCredentialsValidator(_httpClient);
+
+        RosterViewModel = new RosterViewModel(
+            new JsonRosterFilterSettingsStore(
+                Path.Combine(localFolderPath, "settings", "roster-filter.json")));
     }
+
+    public RosterViewModel RosterViewModel { get; }
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
-        await RefreshSupabaseSettingsStateAsync(promptIfUnset: true);
+        await RosterViewModel.LoadFilterSettingsAsync();
+        ApplyFilterSettingsToControls();
+
+        await RefreshSupabaseConnectionAsync(promptIfUnset: true);
     }
 
     private async void OnOpenSettingsButtonClick(object sender, RoutedEventArgs e)
@@ -37,19 +50,96 @@ public sealed partial class MainWindow : Window
         await OpenSettingsDialogAsync();
     }
 
-    private async Task RefreshSupabaseSettingsStateAsync(bool promptIfUnset)
+    private async void OnRosterRetryButtonClick(object sender, RoutedEventArgs e)
+    {
+        await RosterViewModel.RefreshAsync();
+    }
+
+    private void OnSeasonComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SeasonComboBox.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse(tag, out RosterSeason season))
+        {
+            RosterViewModel.Season = season;
+        }
+    }
+
+    private void OnTachoTargetsOnlyCheckBoxCheckedChanged(object sender, RoutedEventArgs e)
+    {
+        RosterViewModel.TachoTargetsOnly = TachoTargetsOnlyCheckBox.IsChecked ?? false;
+    }
+
+    private async void OnControlNumberJumpTextBoxKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != VirtualKey.Enter)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        RosterViewModel.JumpToControlNumber();
+
+        RosterEntry? selectedEntry = RosterViewModel.SelectedEntry;
+        if (selectedEntry is null)
+        {
+            return;
+        }
+
+        int index = RosterViewModel.Entries.IndexOf(selectedEntry);
+        if (index >= 0)
+        {
+            await RosterDataGrid.ScrollRowIntoView(index);
+        }
+    }
+
+    private void ApplyFilterSettingsToControls()
+    {
+        string seasonTag = RosterViewModel.Season.ToString();
+        foreach (object item in SeasonComboBox.Items)
+        {
+            if (item is ComboBoxItem { Tag: string itemTag } comboBoxItem
+                && itemTag == seasonTag)
+            {
+                SeasonComboBox.SelectedItem = comboBoxItem;
+                break;
+            }
+        }
+
+        TachoTargetsOnlyCheckBox.IsChecked = RosterViewModel.TachoTargetsOnly;
+    }
+
+    private async Task RefreshSupabaseConnectionAsync(bool promptIfUnset)
     {
         (SupabaseCredentials? credentials, bool isInvalid) = await TryReadCredentialsAsync();
 
-        SupabaseSettingsInfoBar.Title = isInvalid
-            ? "Supabase 接続設定が無効です"
-            : "Supabase 名簿連携が未設定です";
-        SupabaseSettingsInfoBar.IsOpen = credentials is null;
+        RosterViewModel.IsCredentialsInvalid = isInvalid;
 
-        if (credentials is null && promptIfUnset)
+        if (credentials is null)
         {
-            await OpenSettingsDialogAsync();
+            RosterViewModel.SetRosterClient(null);
+
+            if (promptIfUnset)
+            {
+                await OpenSettingsDialogAsync();
+            }
+
+            return;
         }
+
+        RosterViewModel.SetRosterClient(BuildRosterClient(credentials));
+        await RosterViewModel.RefreshAsync();
+    }
+
+    private IRosterClient BuildRosterClient(SupabaseCredentials credentials)
+    {
+        PostgRestRosterClient remoteClient = new(_httpClient, credentials.ProjectUrl, credentials.AnonKey);
+        JsonRosterCache cache = new(
+            Path.Combine(
+                ApplicationData.Current.LocalCacheFolder.Path,
+                "roster",
+                "roster-cache.json"));
+
+        return new CachedRosterClient(remoteClient, cache);
     }
 
     private async Task OpenSettingsDialogAsync()
@@ -73,7 +163,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await RefreshSupabaseSettingsStateAsync(promptIfUnset: false);
+        await RefreshSupabaseConnectionAsync(promptIfUnset: false);
     }
 
     private async Task ShowSaveFailedDialogAsync()

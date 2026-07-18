@@ -1,8 +1,15 @@
 <Window
     x:Class="TachoGraphStudio.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid x:Name="RootGrid" Loaded="OnRootGridLoaded" RowDefinitions="Auto,Auto,*">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:tv="using:WinUI.TableView">
+    <Grid x:Name="RootGrid" Loaded="OnRootGridLoaded" RowDefinitions="Auto,*">
+        <Grid.Resources>
+            <Style x:Key="RosterCellTextStyle" TargetType="TextBlock">
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+        </Grid.Resources>
         <Grid Grid.Row="0" Padding="16,12" ColumnDefinitions="*,Auto">
             <TextBlock
                 Grid.Column="0"
@@ -14,23 +21,154 @@
                 Click="OnOpenSettingsButtonClick"
                 Content="設定" />
         </Grid>
-        <InfoBar
-            x:Name="SupabaseSettingsInfoBar"
-            Grid.Row="1"
-            Margin="16,0"
-            IsClosable="False"
-            Message="名簿機能を使うには Supabase の接続設定が必要です。名簿以外の機能は引き続き利用できます。"
-            Severity="Warning">
-            <InfoBar.ActionButton>
-                <Button Click="OnOpenSettingsButtonClick" Content="設定を開く" />
-            </InfoBar.ActionButton>
-        </InfoBar>
-        <Grid Grid.Row="2">
-            <TextBlock
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Style="{StaticResource TitleTextBlockStyle}"
-                Text="TachoGraphStudio" />
+        <Grid Grid.Row="1" Padding="16,0,16,16" ColumnDefinitions="360,*" ColumnSpacing="16">
+            <!-- 名簿サイドバー（UR-01, UR-02） -->
+            <Border
+                Grid.Column="0"
+                Padding="12"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" RowSpacing="8">
+                    <InfoBar
+                        Grid.Row="0"
+                        IsClosable="True"
+                        IsOpen="{x:Bind RosterViewModel.HasFilterSettingsWarning, Mode=OneWay}"
+                        Message="{x:Bind RosterViewModel.FilterSettingsWarningMessage, Mode=OneWay}"
+                        Severity="Warning" />
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                        <ComboBox
+                            x:Name="SeasonComboBox"
+                            MinWidth="140"
+                            Header="シーズン"
+                            SelectionChanged="OnSeasonComboBoxSelectionChanged">
+                            <ComboBoxItem Content="全て" Tag="All" />
+                            <ComboBoxItem Content="冬期(除雪)" Tag="Winter" />
+                            <ComboBoxItem Content="夏期維持" Tag="Summer" />
+                            <ComboBoxItem Content="通年" Tag="YearRound" />
+                        </ComboBox>
+                        <CheckBox
+                            x:Name="TachoTargetsOnlyCheckBox"
+                            VerticalAlignment="Bottom"
+                            Checked="OnTachoTargetsOnlyCheckBoxCheckedChanged"
+                            Content="タコ対象のみ"
+                            Unchecked="OnTachoTargetsOnlyCheckBoxCheckedChanged" />
+                    </StackPanel>
+                    <TextBox
+                        Grid.Row="2"
+                        PlaceholderText="管理番号・運転者で検索..."
+                        Text="{x:Bind RosterViewModel.SearchKeyword, Mode=TwoWay}" />
+                    <TextBox
+                        x:Name="ControlNumberJumpTextBox"
+                        Grid.Row="3"
+                        KeyDown="OnControlNumberJumpTextBoxKeyDown"
+                        PlaceholderText="管理番号ジャンプ（Enter で選択）"
+                        Text="{x:Bind RosterViewModel.ControlNumberJumpText, Mode=TwoWay}" />
+                    <Grid Grid.Row="4">
+                        <tv:TableView
+                            x:Name="RosterDataGrid"
+                            AutoGenerateColumns="False"
+                            CornerButtonMode="None"
+                            HeadersVisibility="Columns"
+                            IsReadOnly="True"
+                            ItemsSource="{x:Bind RosterViewModel.Entries}"
+                            SelectedItem="{x:Bind RosterViewModel.SelectedEntry, Mode=TwoWay}"
+                            SelectionMode="Single"
+                            SelectionUnit="Row"
+                            Visibility="{x:Bind RosterViewModel.IsGridVisible, Mode=OneWay}">
+                            <tv:TableView.Columns>
+                                <tv:TableViewTextColumn
+                                    Width="64"
+                                    Binding="{Binding ControlNumber}"
+                                    CanFilter="False"
+                                    CanReorder="False"
+                                    CanSort="False"
+                                    Header="管理" />
+                                <tv:TableViewTextColumn
+                                    Width="*"
+                                    Binding="{Binding Detail}"
+                                    CanFilter="False"
+                                    CanReorder="False"
+                                    CanSort="False"
+                                    ElementStyle="{StaticResource RosterCellTextStyle}"
+                                    Header="機械名" />
+                                <tv:TableViewTextColumn
+                                    Width="*"
+                                    Binding="{Binding RegistrationNumber}"
+                                    CanFilter="False"
+                                    CanReorder="False"
+                                    CanSort="False"
+                                    ElementStyle="{StaticResource RosterCellTextStyle}"
+                                    Header="登録番号" />
+                                <tv:TableViewTextColumn
+                                    Width="*"
+                                    Binding="{Binding Driver}"
+                                    CanFilter="False"
+                                    CanReorder="False"
+                                    CanSort="False"
+                                    ElementStyle="{StaticResource RosterCellTextStyle}"
+                                    Header="運転者" />
+                            </tv:TableView.Columns>
+                        </tv:TableView>
+                        <ProgressRing
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsActive="{x:Bind RosterViewModel.IsLoading, Mode=OneWay}"
+                            Visibility="{x:Bind RosterViewModel.IsLoading, Mode=OneWay}" />
+                        <StackPanel
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="8"
+                            Visibility="{x:Bind RosterViewModel.IsNotConfiguredStateVisible, Mode=OneWay}">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                Text="{x:Bind RosterViewModel.NotConfiguredTitle, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="名簿を利用するには接続設定が必要です。"
+                                TextAlignment="Center"
+                                TextWrapping="Wrap" />
+                            <Button
+                                HorizontalAlignment="Center"
+                                Click="OnOpenSettingsButtonClick"
+                                Content="設定を開く" />
+                        </StackPanel>
+                        <StackPanel
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="8"
+                            Visibility="{x:Bind RosterViewModel.IsErrorStateVisible, Mode=OneWay}">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                Text="{x:Bind RosterViewModel.ErrorMessage, Mode=OneWay}"
+                                TextAlignment="Center"
+                                TextWrapping="Wrap" />
+                            <Button
+                                HorizontalAlignment="Center"
+                                Click="OnRosterRetryButtonClick"
+                                Content="再試行" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock
+                        Grid.Row="5"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind RosterViewModel.DataSourceLabel, Mode=OneWay}"
+                        Visibility="{x:Bind RosterViewModel.IsGridVisible, Mode=OneWay}" />
+                </Grid>
+            </Border>
+            <!-- ステージ（Phase 3 以降で実装） -->
+            <Grid Grid.Column="1">
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource TitleTextBlockStyle}"
+                    Text="TachoGraphStudio" />
+            </Grid>
         </Grid>
     </Grid>
 </Window>

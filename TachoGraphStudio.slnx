@@ -10,6 +10,7 @@
     <Project Path="src/TachoGraphStudio.Core/TachoGraphStudio.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TachoGraphStudio.App.Tests/TachoGraphStudio.App.Tests.csproj" />
     <Project Path="tests/TachoGraphStudio.Core.Tests/TachoGraphStudio.Core.Tests.csproj" />
   </Folder>
 </Solution>
