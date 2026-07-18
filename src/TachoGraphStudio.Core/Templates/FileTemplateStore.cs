@@ -45,7 +45,8 @@ public sealed class FileTemplateStore : ITemplateStore
                         Path.GetFileNameWithoutExtension(filePath),
                         ChartTemplateSerializer.Deserialize(json)));
                 }
-                catch (Exception exception) when (exception is TemplateFormatException or IOException)
+                catch (Exception exception)
+                    when (exception is TemplateFormatException or IOException or UnauthorizedAccessException)
                 {
                     failures.Add(new TemplateLoadFailure(fileName, exception.Message));
                 }

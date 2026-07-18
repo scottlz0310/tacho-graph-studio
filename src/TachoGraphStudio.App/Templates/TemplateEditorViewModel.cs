@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -22,6 +24,7 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
     ];
 
     private readonly ITemplateStore _store;
+    private readonly List<TemplateItemViewModel> _subscribedItems = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedTemplate))]
@@ -44,6 +47,7 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(store);
 
         _store = store;
+        Templates.CollectionChanged += OnTemplatesCollectionChanged;
     }
 
     public ObservableCollection<TemplateItemViewModel> Templates { get; } = [];
@@ -251,6 +255,33 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
 
         ErrorMessage = null;
         return SelectedTemplate.AddField(trimmed);
+    }
+
+    // Reset(Clear) では OldItems が渡らないため、購読済みリストを基準に張り直す
+    private void OnTemplatesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (TemplateItemViewModel item in _subscribedItems)
+        {
+            item.PropertyChanged -= OnTemplateItemPropertyChanged;
+        }
+
+        _subscribedItems.Clear();
+
+        foreach (TemplateItemViewModel item in Templates)
+        {
+            item.PropertyChanged += OnTemplateItemPropertyChanged;
+            _subscribedItems.Add(item);
+        }
+
+        OnPropertyChanged(nameof(HasUnsavedChanges));
+    }
+
+    private void OnTemplateItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TemplateItemViewModel.IsDirty))
+        {
+            OnPropertyChanged(nameof(HasUnsavedChanges));
+        }
     }
 
     private string GenerateUniqueName(string baseName)

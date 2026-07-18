@@ -238,6 +238,68 @@ public sealed class TemplateEditorViewModelTests
         Assert.False(editor.HasError);
     }
 
+    [Fact]
+    public async Task HasUnsavedChanges_NotifiesOnTemplateAndDirtyChanges()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+        int notificationCount = 0;
+        editor.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TemplateEditorViewModel.HasUnsavedChanges))
+            {
+                notificationCount++;
+            }
+        };
+
+        // 追加(CreateNew)で通知
+        editor.CreateNew();
+        Assert.True(notificationCount > 0);
+        Assert.True(editor.HasUnsavedChanges);
+
+        // 保存(IsDirty 変化)で通知
+        int beforeSave = notificationCount;
+        await editor.SaveSelectedAsync();
+        Assert.True(notificationCount > beforeSave);
+        Assert.False(editor.HasUnsavedChanges);
+
+        // 既存要素のフィールド編集(IsDirty 変化)で通知
+        int beforeEdit = notificationCount;
+        editor.SelectedTemplate!.Fields[0].XRatio = 0.9;
+        Assert.True(notificationCount > beforeEdit);
+        Assert.True(editor.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public async Task HasUnsavedChanges_NotifiesAfterReloadReplacesItems()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+        editor.SelectedTemplate!.Name = "編集中";
+        Assert.True(editor.HasUnsavedChanges);
+
+        // 再読込(Clear + 再構築)後も新しい要素の IsDirty 変更が通知される
+        await editor.LoadAsync();
+        Assert.False(editor.HasUnsavedChanges);
+
+        int notificationCount = 0;
+        editor.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TemplateEditorViewModel.HasUnsavedChanges))
+            {
+                notificationCount++;
+            }
+        };
+        editor.SelectedTemplate!.Name = "再編集";
+
+        Assert.True(notificationCount > 0);
+        Assert.True(editor.HasUnsavedChanges);
+    }
+
     private static ChartTemplate CreateTemplate(string name, params string[] fieldNames)
     {
         string[] names = fieldNames.Length == 0 ? ["driver"] : fieldNames;

@@ -78,15 +78,21 @@ public sealed partial class TemplateItemViewModel : ObservableObject
         }
     }
 
-    // フィールド名の重複はここで検出する(辞書キーのため保存できない)
+    // フィールド名は辞書キーになるため、リネーム後の空白・重複はここ(保存境界)で検出する
     public ChartTemplate ToChartTemplate()
     {
         Dictionary<string, TextFieldDefinition> fields = [];
         foreach (TemplateFieldViewModel field in Fields)
         {
-            if (!fields.TryAdd(field.Name, field.ToDefinition()))
+            string name = (field.Name ?? "").Trim();
+            if (name.Length == 0)
             {
-                throw new TemplateFormatException($"フィールド名 '{field.Name}' が重複しています。");
+                throw new TemplateFormatException("名前が空のフィールドがあります。フィールド名を入力してください。");
+            }
+
+            if (!fields.TryAdd(name, field.ToDefinition()))
+            {
+                throw new TemplateFormatException($"フィールド名 '{name}' が重複しています。");
             }
         }
 

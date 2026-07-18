@@ -30,16 +30,43 @@ public sealed class TemplateItemViewModelTests
             ChartTemplateSerializer.Serialize(item.ToChartTemplate()));
     }
 
-    [Fact]
-    public void ToChartTemplate_DuplicateFieldNameThrows()
+    [Theory]
+    [InlineData("driver")]
+    [InlineData(" driver ")]
+    public void ToChartTemplate_DuplicateFieldNameAfterRenameThrows(string renamed)
     {
         TemplateItemViewModel item = new("Yazaki45", CreateTemplate("Yazaki45", "driver", "vehicle_no"));
-        item.Fields[1].Name = "driver";
+        item.Fields[1].Name = renamed;
 
         TemplateFormatException exception = Assert.Throws<TemplateFormatException>(
             () => item.ToChartTemplate());
 
         Assert.Contains("driver", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ToChartTemplate_BlankFieldNameAfterRenameThrows(string renamed)
+    {
+        TemplateItemViewModel item = new("Yazaki45", CreateTemplate("Yazaki45", "driver"));
+        item.Fields[0].Name = renamed;
+
+        TemplateFormatException exception = Assert.Throws<TemplateFormatException>(
+            () => item.ToChartTemplate());
+
+        Assert.Contains("フィールド名", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ToChartTemplate_TrimsRenamedFieldName()
+    {
+        TemplateItemViewModel item = new("Yazaki45", CreateTemplate("Yazaki45", "driver"));
+        item.Fields[0].Name = " vehicle_no ";
+
+        ChartTemplate template = item.ToChartTemplate();
+
+        Assert.Equal(["vehicle_no"], template.Fields.Keys);
     }
 
     [Fact]

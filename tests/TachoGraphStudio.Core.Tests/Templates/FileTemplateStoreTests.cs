@@ -1,3 +1,6 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
+
 using TachoGraphStudio.Core.Templates;
 
 namespace TachoGraphStudio.Core.Tests.Templates;
@@ -138,6 +141,45 @@ public sealed class FileTemplateStoreTests : IDisposable
         TemplateLoadFailure failure = Assert.Single(result.Failures);
         Assert.Equal("broken.json", failure.FileName);
         Assert.NotEmpty(failure.Message);
+    }
+
+    [Fact]
+    public async Task ListAsync_AccessDeniedFileReportsFailureAndKeepsOthers()
+    {
+        // ACL の読み取り拒否で UnauthorizedAccessException(IOException 非派生)の failure path を再現する
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        FileTemplateStore store = new(_temporaryDirectory);
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45"));
+        string deniedPath = Path.Combine(_temporaryDirectory, "denied.json");
+        await File.WriteAllTextAsync(deniedPath, "{}");
+        FileInfo fileInfo = new(deniedPath);
+        FileSecurity security = fileInfo.GetAccessControl();
+        FileSystemAccessRule denyRead = new(
+            WindowsIdentity.GetCurrent().User!,
+            FileSystemRights.Read,
+            AccessControlType.Deny);
+        security.AddAccessRule(denyRead);
+        fileInfo.SetAccessControl(security);
+
+        try
+        {
+            TemplateStoreListResult result = await store.ListAsync();
+
+            StoredTemplate listed = Assert.Single(result.Templates);
+            Assert.Equal("Yazaki45", listed.Id);
+            TemplateLoadFailure failure = Assert.Single(result.Failures);
+            Assert.Equal("denied.json", failure.FileName);
+            Assert.NotEmpty(failure.Message);
+        }
+        finally
+        {
+            security.RemoveAccessRule(denyRead);
+            fileInfo.SetAccessControl(security);
+        }
     }
 
     [Theory]
