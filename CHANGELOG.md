@@ -29,6 +29,8 @@
 - App: `RosterViewModel`（`CommunityToolkit.Mvvm`）。名簿の取得・フィルタ適用・選択状態・読み込み中/エラー/未接続の表示状態を管理し、シーズン・タコ対象フィルタの変更をローカル永続化と連動させる
 - `Core.Imaging`: シート読込（FR-01, FR-02）。`SheetLoader` が JPEG / PDF（複数ページ）/ 複数ファイルのバッチ投入を `IAsyncEnumerable<SheetImage>` で逐次供給する。Core はエンコード済み画像バイト列のみを扱い、デコードは円盤分割（issue #8, OpenCvSharp）に委ねる
 - App: `WindowsPdfRasterizer`。`Windows.Data.Pdf`（OS 標準）による `IPdfRasterizer` 実装。既定 600dpi でページをラスタライズする（NFR-03）
+- `Core.Imaging`: 円盤の自動検出・分割（FR-03）。`SheetSplitter` が GIMP 版 `split_by_auto_detect` の実績値（threshold=15・padding=20px・円盤径 123.5mm・最小サイズ=径の 2/3・解析長辺 1200px）を移植し、しきい値・パディング・最大枚数・DPI を `DiscSplitOptions` で調整可能にする。OpenCvSharp4 はこの変更で導入
+- `Core.Imaging`: 充填率フィルタ（`MinFillRatio`、既定 0.4）。スキャナ縁の黒帯がページを一周し bbox がシート全体になる誤検出（実スキャンで fill=0.013、実円盤は 0.77 前後）を除外する
 
 ### Changed
 
