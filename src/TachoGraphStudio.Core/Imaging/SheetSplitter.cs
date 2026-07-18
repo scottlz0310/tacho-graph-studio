@@ -130,25 +130,7 @@ public sealed class SheetSplitter
         using Mat analysis = new();
         Cv2.Resize(pixels, analysis, new Size(analysisWidth, analysisHeight), 0, 0, InterpolationFlags.Nearest);
 
-        // 前景判定 nonwhite = 255 - min(B,G,R) >= threshold は min(B,G,R) <= 255 - threshold と等価
-        Mat[] channels = Cv2.Split(analysis);
-        try
-        {
-            using Mat minChannel = new();
-            Cv2.Min(channels[0], channels[1], minChannel);
-            Cv2.Min(minChannel, channels[2], minChannel);
-
-            Mat mask = new();
-            Cv2.Threshold(minChannel, mask, 255 - threshold, 255, ThresholdTypes.BinaryInv);
-            return mask;
-        }
-        finally
-        {
-            foreach (Mat channel in channels)
-            {
-                channel.Dispose();
-            }
-        }
+        return ForegroundMask.Build(analysis, threshold);
     }
 
     private static int MinimumDiscSizePx(double? dpi)
