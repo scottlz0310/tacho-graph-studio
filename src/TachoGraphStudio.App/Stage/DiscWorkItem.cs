@@ -17,6 +17,10 @@ public sealed partial class DiscWorkItem : ObservableObject
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
 
+    // 回転補正角(度、-180〜+180)。プレビューでは非破壊レイヤー合成、確定保存(issue #14)で本合成する(FR-07)
+    [ObservableProperty]
+    public partial double RotationAngle { get; set; }
+
     public DiscWorkItem(int number, ProcessedDisc disc)
     {
         ArgumentNullException.ThrowIfNull(disc);

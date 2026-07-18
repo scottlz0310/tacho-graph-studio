@@ -89,6 +89,46 @@ public sealed class StageViewModelTests
     }
 
     [Fact]
+    public async Task ResetRotation_ResetsSelectedDiscOnly()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
+        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.Discs[0].RotationAngle = 45.0;
+        viewModel.Discs[1].RotationAngle = -30.0;
+
+        viewModel.SelectedDisc = viewModel.Discs[0];
+        viewModel.ResetRotation();
+
+        Assert.Equal(0.0, viewModel.Discs[0].RotationAngle);
+        Assert.Equal(-30.0, viewModel.Discs[1].RotationAngle);
+    }
+
+    [Fact]
+    public void ResetRotation_WithoutSelectionDoesNothing()
+    {
+        StageViewModel viewModel = new(new FakeStagePipeline(), new NullImageSourceFactory());
+
+        viewModel.ResetRotation();
+
+        Assert.False(viewModel.HasSelectedDisc);
+    }
+
+    [Fact]
+    public async Task HasSelectedDisc_FollowsSelection()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = new(pipeline, new NullImageSourceFactory());
+        Assert.False(viewModel.HasSelectedDisc);
+
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        Assert.True(viewModel.HasSelectedDisc);
+
+        viewModel.SelectedDisc = null;
+        Assert.False(viewModel.HasSelectedDisc);
+    }
+
+    [Fact]
     public async Task ImportAsync_EmptyPathsDoesNothing()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };

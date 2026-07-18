@@ -69,6 +69,21 @@ public sealed partial class MainWindow : Window
         await StageViewModel.ImportAsync([.. files.Select(file => file.Path)]);
     }
 
+    private void OnPreviewFullscreenRequested(object? sender, EventArgs e)
+    {
+        StageViewModel.IsPreviewFullscreen = true;
+    }
+
+    private void OnCloseFullscreenPreviewClick(object sender, RoutedEventArgs e)
+    {
+        StageViewModel.IsPreviewFullscreen = false;
+    }
+
+    private void OnResetRotationClick(object sender, RoutedEventArgs e)
+    {
+        StageViewModel.ResetRotation();
+    }
+
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
         await RosterViewModel.LoadFilterSettingsAsync();

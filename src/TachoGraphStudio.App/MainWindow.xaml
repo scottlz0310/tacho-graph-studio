@@ -162,10 +162,10 @@
                         Visibility="{x:Bind RosterViewModel.IsGridVisible, Mode=OneWay}" />
                 </Grid>
             </Border>
-            <!-- ステージ（FR-04: サムネイルナビ＋プレビュー） -->
+            <!-- ステージ（FR-04, FR-06〜08: サムネイルナビ＋プレビュー＋回転補正） -->
             <Grid
                 Grid.Column="1"
-                RowDefinitions="Auto,Auto,Auto,*"
+                RowDefinitions="Auto,Auto,Auto,*,Auto"
                 RowSpacing="12">
                 <StackPanel
                     Grid.Row="0"
@@ -237,10 +237,10 @@
                     BorderThickness="1"
                     CornerRadius="4">
                     <Grid>
-                        <Image
-                            Margin="12"
-                            Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}"
-                            Stretch="Uniform" />
+                        <stage:DiscPreviewControl
+                            Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=OneWay, FallbackValue=0}"
+                            FullscreenRequested="OnPreviewFullscreenRequested"
+                            Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}" />
                         <TextBlock
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
@@ -249,7 +249,57 @@
                             Visibility="{x:Bind StageViewModel.IsEmptyStateVisible, Mode=OneWay}" />
                     </Grid>
                 </Border>
+                <!-- 回転補正（FR-07: スライダー・数値入力・リセット） -->
+                <Grid
+                    Grid.Row="4"
+                    ColumnDefinitions="Auto,*,Auto,Auto"
+                    ColumnSpacing="12">
+                    <TextBlock
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        Text="回転補正:" />
+                    <Slider
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
+                        Maximum="180"
+                        Minimum="-180"
+                        StepFrequency="0.5"
+                        Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
+                    <NumberBox
+                        Grid.Column="2"
+                        MinWidth="110"
+                        IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
+                        Maximum="180"
+                        Minimum="-180"
+                        SmallChange="0.5"
+                        SpinButtonPlacementMode="Compact"
+                        Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
+                    <Button
+                        Grid.Column="3"
+                        Click="OnResetRotationClick"
+                        Content="リセット"
+                        IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}" />
+                </Grid>
             </Grid>
+        </Grid>
+        <!-- 全画面拡大プレビュー（FR-08） -->
+        <Grid
+            Grid.Row="0"
+            Grid.RowSpan="2"
+            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+            Visibility="{x:Bind StageViewModel.IsPreviewFullscreen, Mode=OneWay}">
+            <stage:DiscPreviewControl
+                Margin="24"
+                Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=OneWay, FallbackValue=0}"
+                IsFullscreenButtonVisible="False"
+                Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}" />
+            <Button
+                Margin="24"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Click="OnCloseFullscreenPreviewClick"
+                Content="閉じる" />
         </Grid>
     </Grid>
 </Window>

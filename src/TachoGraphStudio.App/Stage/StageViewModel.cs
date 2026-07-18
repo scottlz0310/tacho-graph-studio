@@ -12,7 +12,11 @@ public sealed partial class StageViewModel : ObservableObject
     private readonly IStagePipeline _pipeline;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedDisc))]
     public partial DiscWorkItem? SelectedDisc { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsPreviewFullscreen { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsImportEnabled))]
@@ -39,6 +43,16 @@ public sealed partial class StageViewModel : ObservableObject
     public bool IsImportEnabled => !IsImporting;
 
     public bool HasImportError => ImportError is not null;
+
+    public bool HasSelectedDisc => SelectedDisc is not null;
+
+    public void ResetRotation()
+    {
+        if (SelectedDisc is not null)
+        {
+            SelectedDisc.RotationAngle = 0;
+        }
+    }
 
     public async Task ImportAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
     {
