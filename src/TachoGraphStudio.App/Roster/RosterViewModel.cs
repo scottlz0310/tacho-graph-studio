@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -34,6 +35,10 @@ public sealed partial class RosterViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsErrorStateVisible))]
     [NotifyPropertyChangedFor(nameof(IsGridVisible))]
     public partial string? ErrorMessage { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFilterSettingsWarning))]
+    public partial string? FilterSettingsWarningMessage { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsErrorStateVisible))]
@@ -73,6 +78,8 @@ public sealed partial class RosterViewModel : ObservableObject
         ? "Supabase 接続設定が無効です"
         : "Supabase 未接続";
 
+    public bool HasFilterSettingsWarning => FilterSettingsWarningMessage is not null;
+
     public bool IsNotConfiguredStateVisible => !IsCredentialsConfigured;
 
     public bool IsErrorStateVisible => IsCredentialsConfigured && !IsLoading && ErrorMessage is not null;
@@ -88,7 +95,7 @@ public sealed partial class RosterViewModel : ObservableObject
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            ErrorMessage = "名簿フィルタ設定の読み込みに失敗しました。既定のフィルタで続行します。";
+            FilterSettingsWarningMessage = "名簿フィルタ設定の読み込みに失敗しました。既定のフィルタで続行します。";
             return;
         }
 
@@ -148,9 +155,25 @@ public sealed partial class RosterViewModel : ObservableObject
         {
             ErrorMessage = exception.Message;
         }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "Supabase への接続に失敗しました。接続設定(URL・anon キー)を確認してください。";
+        }
+        catch (JsonException)
+        {
+            ErrorMessage = "名簿データの形式が不正です。Supabase 側の machine_picklist ビューを確認してください。";
+        }
+        catch (InvalidDataException)
+        {
+            ErrorMessage = "名簿データの形式が不正です。Supabase 側の machine_picklist ビューを確認してください。";
+        }
+        catch (IOException)
+        {
+            ErrorMessage = "名簿キャッシュの書き込みに失敗しました。ディスク容量や権限を確認してください。";
+        }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            ErrorMessage = "名簿の取得に失敗しました。Supabase の接続設定・ネットワーク状態を確認してください。";
+            ErrorMessage = "名簿の取得に失敗しました。";
         }
         finally
         {
@@ -208,7 +231,7 @@ public sealed partial class RosterViewModel : ObservableObject
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            ErrorMessage = "名簿フィルタ設定の保存に失敗しました。";
+            FilterSettingsWarningMessage = "名簿フィルタ設定の保存に失敗しました。";
         }
     }
 }
