@@ -59,6 +59,21 @@ public sealed class RosterFilterTests
         Assert.Equal(expected, result.Count == 1);
     }
 
+    [Theory]
+    [InlineData(12345, "234", true)]
+    [InlineData(12345, "999", false)]
+    public void Apply_FiltersKeywordByControlNumber(long controlNumber, string keyword, bool expected)
+    {
+        RosterEntry entry = CreateEntry(controlNumber: controlNumber);
+
+        IReadOnlyList<RosterEntry> result = RosterFilter.Apply(
+            [entry],
+            new RosterFilterSettings { TachoTargetsOnly = false },
+            keyword);
+
+        Assert.Equal(expected, result.Count == 1);
+    }
+
     [Fact]
     public void Apply_DefaultSettingsShowOnlyTachoTargets()
     {

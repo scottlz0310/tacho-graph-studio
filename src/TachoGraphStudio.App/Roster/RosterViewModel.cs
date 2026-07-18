@@ -81,7 +81,17 @@ public sealed partial class RosterViewModel : ObservableObject
 
     public async Task LoadFilterSettingsAsync(CancellationToken cancellationToken = default)
     {
-        RosterFilterSettings? savedSettings = await _filterSettingsStore.ReadAsync(cancellationToken);
+        RosterFilterSettings? savedSettings;
+        try
+        {
+            savedSettings = await _filterSettingsStore.ReadAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ErrorMessage = "名簿フィルタ設定の読み込みに失敗しました。既定のフィルタで続行します。";
+            return;
+        }
+
         if (savedSettings is null)
         {
             return;
@@ -137,6 +147,10 @@ public sealed partial class RosterViewModel : ObservableObject
         catch (RosterUnavailableException exception)
         {
             ErrorMessage = exception.Message;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ErrorMessage = "名簿の取得に失敗しました。Supabase の接続設定・ネットワーク状態を確認してください。";
         }
         finally
         {

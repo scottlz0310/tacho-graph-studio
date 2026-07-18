@@ -77,7 +77,8 @@ public static class RosterFilter
             return true;
         }
 
-        return entry.Detail.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+        return entry.ControlNumber.ToString(CultureInfo.InvariantCulture).Contains(keyword, StringComparison.OrdinalIgnoreCase)
+            || entry.Detail.Contains(keyword, StringComparison.OrdinalIgnoreCase)
             || entry.Specification.Contains(keyword, StringComparison.OrdinalIgnoreCase)
             || entry.RegistrationNumber.Contains(keyword, StringComparison.OrdinalIgnoreCase)
             || entry.Driver.Contains(keyword, StringComparison.OrdinalIgnoreCase);
