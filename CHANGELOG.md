@@ -25,9 +25,12 @@
 - App: 名簿サイドバー実装前の暫定導線として、キー未設定・無効時に `InfoBar` で設定を促す（名簿以外の機能は引き続き利用可能）
 - `Core.Settings`: `SupabaseCredentialsValidator`。保存前に `machine_picklist` へ実接続し、フォーマットのみでは検出できない無効な anon キー（401/403 等）を弾く
 - `Core.Settings`: `ISecretStore.TryWriteAsync` 拡張メソッド。DPAPI・ディスク書き込み失敗時に例外を伝播させず呼び出し元へ通知する
+- App: 名簿サイドバー UI（`WinUI.TableView` によるグリッド、シーズン・タコ対象フィルタ、キーワード検索、管理番号ジャンプ）。行クリック選択・選択行ハイライトに対応(UR-01, UR-02)
+- App: `RosterViewModel`（`CommunityToolkit.Mvvm`）。名簿の取得・フィルタ適用・選択状態・読み込み中/エラー/未接続の表示状態を管理し、シーズン・タコ対象フィルタの変更をローカル永続化と連動させる
 
 ### Changed
 
 - `.appinstaller` の配置先を GitHub Releases に決定（要件定義書 §1.3・アーキテクチャ §5 に反映）
 - インストールスクリプトに UAC 自己昇格を追加（非管理者ターミナルからの実行に対応）
 - `AtomicJsonFile<TDocument>` を `Core.Roster` から `Core.Persistence` へ移動し public 化（App 側の `ISecretStore` 実装からも再利用するため）
+- App: Supabase 未設定・無効時の導線をトップレベル `InfoBar` から名簿サイドバー内の表示に統合(アーキテクチャ §3.3 の方針どおり、名簿パネル実装後は同パネル内の導線に一本化)
