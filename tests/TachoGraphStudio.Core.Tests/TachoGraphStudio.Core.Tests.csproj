@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- GIMP 版 TachoGraphWizard の実運用テンプレート(互換性回帰テスト用) -->
+    <None Include="Templates\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/TachoGraphStudio.Core/TachoGraphStudio.Core.csproj" />
   </ItemGroup>
 
