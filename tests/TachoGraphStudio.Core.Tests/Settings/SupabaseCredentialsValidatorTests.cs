@@ -75,6 +75,18 @@ public sealed class SupabaseCredentialsValidatorTests
             () => validator.IsValidAsync(Credentials, cancellationTokenSource.Token));
     }
 
+    [Fact]
+    public async Task IsValidAsync_TimeoutWithoutCallerCancellationReturnsFalse()
+    {
+        RecordingHandler handler = new(_ => throw new TaskCanceledException("The request timed out."));
+        using HttpClient httpClient = new(handler);
+        SupabaseCredentialsValidator validator = new(httpClient);
+
+        bool result = await validator.IsValidAsync(Credentials, CancellationToken.None);
+
+        Assert.False(result);
+    }
+
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json)
     {
         return new HttpResponseMessage(statusCode)

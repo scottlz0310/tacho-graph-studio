@@ -27,7 +27,9 @@ public sealed class SupabaseCredentialsValidator
             await client.GetRosterAsync(cancellationToken);
             return true;
         }
-        catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or JsonException)
+        catch (Exception exception) when (
+            exception is HttpRequestException or InvalidDataException or JsonException
+            || (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             return false;
         }
