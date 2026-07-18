@@ -18,4 +18,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../src/TachoGraphStudio.Core/TachoGraphStudio.Core.csproj" />
+  </ItemGroup>
+
 </Project>
