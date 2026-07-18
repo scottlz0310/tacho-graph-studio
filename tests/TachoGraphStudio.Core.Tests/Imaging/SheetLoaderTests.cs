@@ -91,6 +91,20 @@ public sealed class SheetLoaderTests : IDisposable
         Assert.Contains(path, exception.Message);
     }
 
+    [Fact]
+    public async Task LoadAsync_SignatureOnlyContentIsAccepted()
+    {
+        // この層の契約はシグネチャ確認のみ。切り詰め等の破損検出はデコード段（issue #8）が担う
+        byte[] signatureOnly = [0xFF, 0xD8];
+        string path = WriteFile("truncated.jpg", signatureOnly);
+        SheetLoader loader = new(new FakePdfRasterizer());
+
+        List<SheetImage> sheets = await ToListAsync(loader.LoadAsync([path]));
+
+        SheetImage sheet = Assert.Single(sheets);
+        Assert.Equal(signatureOnly, sheet.ImageBytes);
+    }
+
     [Theory]
     [InlineData(new byte[0])]
     [InlineData(new byte[] { 0xFF })]

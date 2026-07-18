@@ -4,7 +4,8 @@ namespace TachoGraphStudio.Core.Imaging;
 
 public sealed class SheetLoader
 {
-    // JPEG の SOI マーカー。破損ファイル・誤った拡張子をデコード段（issue #8）より前に弾く
+    // JPEG の SOI マーカー。この層の契約はシグネチャ確認（誤った拡張子・明白な非 JPEG の排除）のみで、
+    // 切り詰め等の破損検出はデコード段（issue #8, OpenCvSharp）が担う
     private static readonly byte[] JpegMagic = [0xFF, 0xD8];
 
     private readonly IPdfRasterizer _pdfRasterizer;

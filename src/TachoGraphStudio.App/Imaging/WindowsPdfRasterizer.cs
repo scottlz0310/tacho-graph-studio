@@ -29,8 +29,8 @@ public sealed class WindowsPdfRasterizer : IPdfRasterizer
         string pdfPath,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        StorageFile file = await StorageFile.GetFileFromPathAsync(pdfPath);
-        PdfDocument document = await PdfDocument.LoadFromFileAsync(file);
+        StorageFile file = await StorageFile.GetFileFromPathAsync(pdfPath).AsTask(cancellationToken);
+        PdfDocument document = await PdfDocument.LoadFromFileAsync(file).AsTask(cancellationToken);
 
         for (uint pageIndex = 0; pageIndex < document.PageCount; pageIndex++)
         {
@@ -44,13 +44,15 @@ public sealed class WindowsPdfRasterizer : IPdfRasterizer
             };
 
             using InMemoryRandomAccessStream stream = new();
-            await page.RenderToStreamAsync(stream, options);
+            await page.RenderToStreamAsync(stream, options).AsTask(cancellationToken);
 
             byte[] pageBytes = new byte[stream.Size];
             using DataReader reader = new(stream.GetInputStreamAt(0));
-            await reader.LoadAsync((uint)stream.Size);
+            await reader.LoadAsync((uint)stream.Size).AsTask(cancellationToken);
             reader.ReadBytes(pageBytes);
 
+            // WinRT 操作の完了後にキャンセルされたページを呼び出し元へ流さない
+            cancellationToken.ThrowIfCancellationRequested();
             yield return pageBytes;
         }
     }
