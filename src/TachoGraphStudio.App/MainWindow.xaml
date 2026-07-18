@@ -2,6 +2,7 @@
     x:Class="TachoGraphStudio.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
     xmlns:stage="using:TachoGraphStudio.App.Stage"
     xmlns:tv="using:WinUI.TableView">
     <Grid x:Name="RootGrid" Loaded="OnRootGridLoaded" RowDefinitions="Auto,*">
@@ -22,7 +23,17 @@
                 Click="OnOpenSettingsButtonClick"
                 Content="設定" />
         </Grid>
-        <Grid Grid.Row="1" Padding="16,0,16,16" ColumnDefinitions="360,*" ColumnSpacing="16">
+        <Grid Grid.Row="1" Padding="16,0,16,16">
+            <Grid.ColumnDefinitions>
+                <!-- サイドバー幅はスプリッタで可変(#25)。ウィンドウ状態の永続化は #15 -->
+                <ColumnDefinition
+                    x:Name="SidebarColumn"
+                    MinWidth="240"
+                    MaxWidth="720"
+                    Width="360" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition MinWidth="480" Width="*" />
+            </Grid.ColumnDefinitions>
             <!-- 名簿サイドバー（UR-01, UR-02） -->
             <Border
                 Grid.Column="0"
@@ -162,9 +173,16 @@
                         Visibility="{x:Bind RosterViewModel.IsGridVisible, Mode=OneWay}" />
                 </Grid>
             </Border>
+            <!-- キーボード操作(矢印キー)・AutomationPeer を備えた toolkit GridSplitter を使う -->
+            <controls:GridSplitter
+                Grid.Column="1"
+                Width="16"
+                AutomationProperties.Name="名簿サイドバーの幅"
+                ResizeBehavior="BasedOnAlignment"
+                ResizeDirection="Columns" />
             <!-- ステージ（FR-04, FR-06〜08: サムネイルナビ＋プレビュー＋回転補正） -->
             <Grid
-                Grid.Column="1"
+                Grid.Column="2"
                 RowDefinitions="Auto,Auto,Auto,*,Auto"
                 RowSpacing="12">
                 <StackPanel

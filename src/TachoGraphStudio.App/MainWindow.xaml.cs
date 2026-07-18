@@ -84,6 +84,7 @@ public sealed partial class MainWindow : Window
         StageViewModel.ResetRotation();
     }
 
+
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
         await RosterViewModel.LoadFilterSettingsAsync();
