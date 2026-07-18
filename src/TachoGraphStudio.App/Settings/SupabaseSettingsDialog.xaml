@@ -1,0 +1,27 @@
+<ContentDialog
+    x:Class="TachoGraphStudio.App.Settings.SupabaseSettingsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Supabase 接続設定"
+    CloseButtonText="キャンセル"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    PrimaryButtonText="保存">
+    <StackPanel MinWidth="360" Spacing="12">
+        <TextBlock
+            Text="名簿データを取得する Supabase プロジェクトの URL と anon キーを入力してください。"
+            TextWrapping="Wrap" />
+        <TextBox
+            x:Name="ProjectUrlTextBox"
+            Header="プロジェクト URL"
+            PlaceholderText="https://xxxxx.supabase.co" />
+        <PasswordBox
+            x:Name="AnonKeyPasswordBox"
+            Header="anon キー" />
+        <TextBlock
+            x:Name="ErrorTextBlock"
+            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+            TextWrapping="Wrap"
+            Visibility="Collapsed" />
+    </StackPanel>
+</ContentDialog>
