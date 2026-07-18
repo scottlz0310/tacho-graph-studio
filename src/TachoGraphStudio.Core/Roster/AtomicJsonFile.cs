@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace TachoGraphStudio.Core.Roster;
@@ -7,21 +8,24 @@ internal sealed class AtomicJsonFile<TDocument> : IDisposable
 {
     private readonly string _displayName;
     private readonly string _filePath;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _gate;
     private readonly JsonSerializerOptions _serializerOptions;
+    private bool _disposed;
 
     public AtomicJsonFile(
         string filePath,
         JsonSerializerOptions serializerOptions,
         string displayName)
     {
-        _filePath = filePath;
+        _filePath = Path.GetFullPath(filePath);
         _serializerOptions = serializerOptions;
         _displayName = displayName;
+        _gate = AtomicJsonFileGateRegistry.Get(_filePath);
     }
 
     public async Task<TDocument?> ReadAsync(CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         await _gate.WaitAsync(cancellationToken);
         try
         {
@@ -55,6 +59,7 @@ internal sealed class AtomicJsonFile<TDocument> : IDisposable
     public async Task WriteAsync(TDocument document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(document);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         await _gate.WaitAsync(cancellationToken);
         try
@@ -86,6 +91,19 @@ internal sealed class AtomicJsonFile<TDocument> : IDisposable
 
                 File.Move(temporaryFilePath, _filePath, overwrite: true);
             }
+            catch (OperationCanceledException cancellationException)
+            {
+                try
+                {
+                    File.Delete(temporaryFilePath);
+                }
+                catch (Exception cleanupException)
+                {
+                    cancellationException.Data["TemporaryFileCleanupException"] = cleanupException;
+                }
+
+                throw;
+            }
             catch (Exception writeException)
             {
                 try
@@ -110,6 +128,17 @@ internal sealed class AtomicJsonFile<TDocument> : IDisposable
 
     public void Dispose()
     {
-        _gate.Dispose();
+        _disposed = true;
     }
+}
+
+internal static class AtomicJsonFileGateRegistry
+{
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> Gates = new(
+        OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal);
+
+    public static SemaphoreSlim Get(string filePath) =>
+        Gates.GetOrAdd(filePath, static _ => new SemaphoreSlim(1, 1));
 }

@@ -106,6 +106,43 @@ public sealed class JsonRosterCacheTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(_temporaryDirectory, "roster.json.*.tmp"));
     }
 
+    [Theory]
+    [InlineData(1_000)]
+    [InlineData(10_000)]
+    public async Task InstancesForSamePath_SerializeConcurrentReadAndWrite(int entryCount)
+    {
+        string cachePath = Path.Combine(_temporaryDirectory, "roster.json");
+        using JsonRosterCache reader = new(cachePath);
+        using JsonRosterCache writer = new(cachePath);
+        RosterResult initialRoster = new(
+            CreateEntries(entryCount),
+            RosterDataSource.Remote,
+            RetrievedAt);
+        RosterResult replacementRoster = new([], RosterDataSource.Remote, RetrievedAt);
+        await writer.WriteAsync(initialRoster, CancellationToken.None);
+
+        Task<RosterResult?> readTask = reader.ReadAsync(CancellationToken.None);
+        Task writeTask = writer.WriteAsync(replacementRoster, CancellationToken.None);
+
+        await Task.WhenAll(readTask, writeTask);
+        Assert.Equal(entryCount, (await readTask)!.Entries.Count);
+        Assert.Empty((await reader.ReadAsync(CancellationToken.None))!.Entries);
+    }
+
+    [Fact]
+    public async Task WriteAsync_CanceledTokenPreservesCancellation()
+    {
+        string cachePath = Path.Combine(_temporaryDirectory, "roster.json");
+        using JsonRosterCache cache = new(cachePath);
+        using CancellationTokenSource cancellationSource = new();
+        await cancellationSource.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => cache.WriteAsync(
+                new RosterResult([], RosterDataSource.Remote, RetrievedAt),
+                cancellationSource.Token));
+    }
+
     [Fact]
     public async Task Dispose_IsIdempotentAndOperationsAfterDisposeThrow()
     {
@@ -125,4 +162,20 @@ public sealed class JsonRosterCacheTests : IDisposable
             Directory.Delete(_temporaryDirectory, recursive: true);
         }
     }
+
+    private static RosterEntry[] CreateEntries(int entryCount) =>
+        Enumerable.Range(1, entryCount)
+            .Select(index => new RosterEntry
+            {
+                ControlNumber = index,
+                Detail = $"machine-{index}",
+                Specification = $"spec-{index}",
+                RegistrationNumber = $"registration-{index}",
+                VehicleType = "truck",
+                Driver = $"driver-{index}",
+                WorkPeriod = "winter",
+                UpdatedAt = RetrievedAt,
+                IsTachoTarget = true,
+            })
+            .ToArray();
 }
