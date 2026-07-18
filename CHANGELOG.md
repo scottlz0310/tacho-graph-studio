@@ -36,6 +36,8 @@
 - App: 名簿サイドバーの幅をスプリッタで可変化（#25）。サイドバーとステージの間に `GridSplitter`（CommunityToolkit.WinUI.Controls.Sizers — キーボード操作・AutomationPeer 対応）を配置し、幅 240〜720px の範囲で調整できる。永続化はウィンドウ状態と合わせて #15 で対応
 - App: ステージ UI 第 2 弾（FR-06〜08）。`DiscPreviewControl` に画像と独立した十字ガイド、`RotateTransform` による非破壊のリアルタイム回転、ビューポート中心を保つズームイン/アウトを実装。回転補正はスライダー（-180°〜+180°）・数値入力・リセットで操作し、角度は円盤ごとに保持。全画面拡大はウィンドウ全面のオーバーレイで同一プレビューを表示する
 
+- `Core.Templates`: チャート紙様式テンプレート（FR-16, FR-25）。GIMP 版 JSON フォーマットの**継承を決定**（#11・要件定義書 未決事項 #2）し、互換モデル（`ChartTemplate`、snake_case・欠落キーは旧実装と同じ既定値）・検証付きシリアライザ（round-trip）・文字入れ座標計算（`CalculatePlacement`: 位置=画像サイズ比、フォントサイズ=短辺比）を実装。実運用テンプレート（Task-Meter / Yazaki45）を fixture に互換性を回帰テストで固定。インポーター（FR-26）は不要と判断
+
 ### Changed
 
 - `.appinstaller` の配置先を GitHub Releases に決定（要件定義書 §1.3・アーキテクチャ §5 に反映）

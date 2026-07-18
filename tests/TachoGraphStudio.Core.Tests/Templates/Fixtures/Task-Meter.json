@@ -1,0 +1,111 @@
+{
+  "name": "Task-Meter",
+  "version": "1.0",
+  "description": "\u30bf\u30b9\u30af\u30e1\u30fc\u30bf\u30fc\u7528",
+  "reference_width": 1481,
+  "reference_height": 1483,
+  "fields": {
+    "date_day": {
+      "position": {
+        "x_ratio": 0.43011478730587444,
+        "y_ratio": 0.6304787592717465
+      },
+      "font": {
+        "family": "Sans-serif",
+        "size_ratio": 0.02,
+        "color": "#000000",
+        "bold": false,
+        "italic": false
+      },
+      "align": "left",
+      "vertical_align": "top",
+      "visible": true,
+      "required": false
+    },
+    "date_month": {
+      "position": {
+        "x_ratio": 0.350438892640108,
+        "y_ratio": 0.6318273769386379
+      },
+      "font": {
+        "family": "Sans-serif",
+        "size_ratio": 0.02,
+        "color": "#000000",
+        "bold": false,
+        "italic": false
+      },
+      "align": "left",
+      "vertical_align": "top",
+      "visible": true,
+      "required": false
+    },
+    "date_year": {
+      "position": {
+        "x_ratio": 0.2518568534773801,
+        "y_ratio": 0.6331759946055293
+      },
+      "font": {
+        "family": "Sans-serif",
+        "size_ratio": 0.02,
+        "color": "#000000",
+        "bold": false,
+        "italic": false
+      },
+      "align": "left",
+      "vertical_align": "top",
+      "visible": true,
+      "required": false
+    },
+    "driver": {
+      "position": {
+        "x_ratio": 0.34031060094530724,
+        "y_ratio": 0.39109912339851655
+      },
+      "font": {
+        "family": "Sans-serif",
+        "size_ratio": 0.02,
+        "color": "#000000",
+        "bold": false,
+        "italic": false
+      },
+      "align": "left",
+      "vertical_align": "top",
+      "visible": true,
+      "required": false
+    },
+    "vehicle_no": {
+      "position": {
+        "x_ratio": 0.6158001350438893,
+        "y_ratio": 0.34861766689143625
+      },
+      "font": {
+        "family": "Sans-serif",
+        "size_ratio": 0.02,
+        "color": "#000000",
+        "bold": false,
+        "italic": false
+      },
+      "align": "left",
+      "vertical_align": "top",
+      "visible": true,
+      "required": false
+    },
+    "vehicle_type": {
+      "position": {
+        "x_ratio": 0.337609723160027,
+        "y_ratio": 0.3452461227242077
+      },
+      "font": {
+        "family": "Sans-serif",
+        "size_ratio": 0.02,
+        "color": "#000000",
+        "bold": false,
+        "italic": false
+      },
+      "align": "left",
+      "vertical_align": "top",
+      "visible": true,
+      "required": false
+    }
+  }
+}
