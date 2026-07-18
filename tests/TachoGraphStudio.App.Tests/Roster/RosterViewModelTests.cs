@@ -32,6 +32,10 @@ public sealed class RosterViewModelTests
             "名簿キャッシュの書き込みに失敗しました。ディスク容量や権限を確認してください。"
         },
         {
+            new UnauthorizedAccessException("Access to the cache path is denied."),
+            "名簿キャッシュの書き込みに失敗しました。ディスク容量や権限を確認してください。"
+        },
+        {
             new JsonException("Invalid response contract."),
             "名簿データの形式が不正です。Supabase 側の machine_picklist ビューを確認してください。"
         },

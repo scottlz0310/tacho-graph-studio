@@ -167,7 +167,7 @@ public sealed partial class RosterViewModel : ObservableObject
         {
             ErrorMessage = "名簿データの形式が不正です。Supabase 側の machine_picklist ビューを確認してください。";
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             ErrorMessage = "名簿キャッシュの書き込みに失敗しました。ディスク容量や権限を確認してください。";
         }
