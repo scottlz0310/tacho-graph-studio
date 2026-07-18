@@ -12,8 +12,7 @@ public sealed class JsonRosterCache : IRosterCache, IDisposable
         WriteIndented = false,
     };
 
-    private readonly string _cacheFilePath;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly AtomicJsonFile<RosterCacheDocument> _file;
 
     public JsonRosterCache(string cacheFilePath)
     {
@@ -22,127 +21,57 @@ public sealed class JsonRosterCache : IRosterCache, IDisposable
             throw new ArgumentException("名簿キャッシュのファイルパスを指定してください。", nameof(cacheFilePath));
         }
 
-        _cacheFilePath = Path.GetFullPath(cacheFilePath);
+        _file = new AtomicJsonFile<RosterCacheDocument>(
+            Path.GetFullPath(cacheFilePath),
+            SerializerOptions,
+            "名簿キャッシュ");
     }
 
     public async Task<RosterResult?> ReadAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken);
-        try
+        RosterCacheDocument? document = await _file.ReadAsync(cancellationToken);
+
+        if (document is null)
         {
-            if (!File.Exists(_cacheFilePath))
-            {
-                return null;
-            }
-
-            await using FileStream stream = new(
-                _cacheFilePath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 4096,
-                useAsync: true);
-
-            RosterCacheDocument? document = await JsonSerializer.DeserializeAsync<RosterCacheDocument>(
-                stream,
-                SerializerOptions,
-                cancellationToken);
-
-            if (document is null)
-            {
-                throw new InvalidDataException("名簿キャッシュが JSON オブジェクトではありません。");
-            }
-
-            if (document.Version != CurrentVersion)
-            {
-                throw new InvalidDataException(
-                    $"名簿キャッシュのバージョン {document.Version} はサポートされていません。");
-            }
-
-            if (document.Entries is null)
-            {
-                throw new InvalidDataException("名簿キャッシュに entries 配列がありません。");
-            }
-
-            if (document.RetrievedAt == default)
-            {
-                throw new InvalidDataException("名簿キャッシュに取得日時がありません。");
-            }
-
-            return new RosterResult(document.Entries, RosterDataSource.Cache, document.RetrievedAt);
+            return null;
         }
-        finally
+
+        if (document.Version != CurrentVersion)
         {
-            _gate.Release();
+            throw new InvalidDataException(
+                $"名簿キャッシュのバージョン {document.Version} はサポートされていません。");
         }
+
+        if (document.Entries is null)
+        {
+            throw new InvalidDataException("名簿キャッシュに entries 配列がありません。");
+        }
+
+        if (document.RetrievedAt == default)
+        {
+            throw new InvalidDataException("名簿キャッシュに取得日時がありません。");
+        }
+
+        return new RosterResult(document.Entries, RosterDataSource.Cache, document.RetrievedAt);
     }
 
     public async Task WriteAsync(RosterResult roster, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(roster);
 
-        await _gate.WaitAsync(cancellationToken);
-        try
+        RosterCacheDocument document = new()
         {
-            string? directoryPath = Path.GetDirectoryName(_cacheFilePath);
-            if (!string.IsNullOrEmpty(directoryPath))
-            {
-                Directory.CreateDirectory(directoryPath);
-            }
+            Version = CurrentVersion,
+            RetrievedAt = roster.RetrievedAt,
+            Entries = roster.Entries.ToList(),
+        };
 
-            string temporaryFilePath = $"{_cacheFilePath}.{Guid.NewGuid():N}.tmp";
-            try
-            {
-                await using (FileStream stream = new(
-                    temporaryFilePath,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None,
-                    bufferSize: 4096,
-                    useAsync: true))
-                {
-                    RosterCacheDocument document = new()
-                    {
-                        Version = CurrentVersion,
-                        RetrievedAt = roster.RetrievedAt,
-                        Entries = roster.Entries.ToList(),
-                    };
-
-                    await JsonSerializer.SerializeAsync(
-                        stream,
-                        document,
-                        SerializerOptions,
-                        cancellationToken);
-                    await stream.FlushAsync(cancellationToken);
-                }
-
-                File.Move(temporaryFilePath, _cacheFilePath, overwrite: true);
-            }
-            catch (Exception writeException)
-            {
-                try
-                {
-                    File.Delete(temporaryFilePath);
-                }
-                catch (Exception cleanupException)
-                {
-                    throw new IOException(
-                        "名簿キャッシュの書き込みと一時ファイルの削除に失敗しました。",
-                        new AggregateException(writeException, cleanupException));
-                }
-
-                throw;
-            }
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _file.WriteAsync(document, cancellationToken);
     }
 
     public void Dispose()
     {
-        _gate.Dispose();
+        _file.Dispose();
     }
 
     private sealed class RosterCacheDocument
