@@ -2,13 +2,19 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 
+using TachoGraphStudio.App.Imaging;
 using TachoGraphStudio.App.Roster;
 using TachoGraphStudio.App.Settings;
+using TachoGraphStudio.App.Stage;
+using TachoGraphStudio.Core.Imaging;
 using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Settings;
 
 using Windows.Storage;
+using Windows.Storage.Pickers;
 using Windows.System;
+
+using WinRT.Interop;
 
 namespace TachoGraphStudio.App;
 
@@ -33,9 +39,35 @@ public sealed partial class MainWindow : Window
         RosterViewModel = new RosterViewModel(
             new JsonRosterFilterSettingsStore(
                 Path.Combine(localFolderPath, "settings", "roster-filter.json")));
+
+        StageViewModel = new StageViewModel(
+            new StagePipeline(new SheetLoader(new WindowsPdfRasterizer())),
+            new WriteableBitmapImageSourceFactory());
     }
 
     public RosterViewModel RosterViewModel { get; }
+
+    public StageViewModel StageViewModel { get; }
+
+    private async void OnImportSheetsButtonClick(object sender, RoutedEventArgs e)
+    {
+        FileOpenPicker picker = new()
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+        };
+        picker.FileTypeFilter.Add(".pdf");
+        picker.FileTypeFilter.Add(".jpg");
+        picker.FileTypeFilter.Add(".jpeg");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+        IReadOnlyList<StorageFile> files = await picker.PickMultipleFilesAsync();
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        await StageViewModel.ImportAsync([.. files.Select(file => file.Path)]);
+    }
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
