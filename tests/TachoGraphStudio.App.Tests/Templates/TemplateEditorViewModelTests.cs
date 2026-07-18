@@ -239,6 +239,73 @@ public sealed class TemplateEditorViewModelTests
     }
 
     [Fact]
+    public async Task SelectedTemplateChange_SelectsFirstField()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, CreateTemplate("Task-Meter", "date_year", "driver"));
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45", "vehicle_no"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+
+        Assert.Equal("date_year", editor.SelectedField?.Name);
+        Assert.True(editor.HasSelectedField);
+
+        editor.SelectedTemplate = editor.Templates[1];
+
+        Assert.Equal("vehicle_no", editor.SelectedField?.Name);
+
+        editor.SelectedTemplate = null;
+
+        Assert.Null(editor.SelectedField);
+        Assert.False(editor.HasSelectedField);
+    }
+
+    [Fact]
+    public async Task AddFieldToSelected_SelectsAddedField()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45", "driver"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+
+        TemplateFieldViewModel? added = editor.AddFieldToSelected("vehicle_no");
+
+        Assert.Same(added, editor.SelectedField);
+    }
+
+    [Theory]
+    [InlineData(0, "driver")]
+    [InlineData(1, "vehicle_no")]
+    [InlineData(2, "driver")]
+    public async Task RemoveSelectedField_RemovesAndSelectsNeighbor(int removeIndex, string expectedSelected)
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45", "date_year", "driver", "vehicle_no"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+        editor.SelectedField = editor.SelectedTemplate!.Fields[removeIndex];
+
+        editor.RemoveSelectedField();
+
+        Assert.Equal(2, editor.SelectedTemplate.Fields.Count);
+        Assert.Equal(expectedSelected, editor.SelectedField?.Name);
+    }
+
+    [Fact]
+    public async Task RemoveSelectedField_LastFieldClearsSelection()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45", "driver"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+
+        editor.RemoveSelectedField();
+
+        Assert.Empty(editor.SelectedTemplate!.Fields);
+        Assert.Null(editor.SelectedField);
+    }
+
+    [Fact]
     public async Task HasUnsavedChanges_NotifiesOnTemplateAndDirtyChanges()
     {
         FakeTemplateStore store = new();

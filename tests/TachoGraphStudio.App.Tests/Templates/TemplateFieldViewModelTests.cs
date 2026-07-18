@@ -86,6 +86,47 @@ public sealed class TemplateFieldViewModelTests
         Assert.Equal(3, editCount);
     }
 
+    [Theory]
+    [InlineData(0, TextAlignment.Left)]
+    [InlineData(1, TextAlignment.Center)]
+    [InlineData(2, TextAlignment.Right)]
+    public void AlignIndex_MapsToEnum(int index, TextAlignment expected)
+    {
+        TemplateFieldViewModel field = CreateField(() => { });
+
+        field.AlignIndex = index;
+
+        Assert.Equal(expected, field.Align);
+        Assert.Equal(index, field.AlignIndex);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(3)]
+    public void AlignIndex_OutOfRangeKeepsPreviousValue(int index)
+    {
+        TemplateFieldViewModel field = CreateField(() => { });
+        field.Align = TextAlignment.Center;
+
+        field.AlignIndex = index;
+
+        Assert.Equal(TextAlignment.Center, field.Align);
+    }
+
+    [Fact]
+    public void AlignChange_NotifiesAlignIndex()
+    {
+        TemplateFieldViewModel field = CreateField(() => { });
+        List<string?> changedProperties = [];
+        field.PropertyChanged += (_, e) => changedProperties.Add(e.PropertyName);
+
+        field.Align = TextAlignment.Right;
+        field.VerticalAlign = VerticalTextAlignment.Bottom;
+
+        Assert.Contains(nameof(TemplateFieldViewModel.AlignIndex), changedProperties);
+        Assert.Contains(nameof(TemplateFieldViewModel.VerticalAlignIndex), changedProperties);
+    }
+
     [Fact]
     public void ToDefinition_RoundTripsAllProperties()
     {

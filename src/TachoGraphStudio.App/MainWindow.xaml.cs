@@ -6,9 +6,11 @@ using TachoGraphStudio.App.Imaging;
 using TachoGraphStudio.App.Roster;
 using TachoGraphStudio.App.Settings;
 using TachoGraphStudio.App.Stage;
+using TachoGraphStudio.App.Templates;
 using TachoGraphStudio.Core.Imaging;
 using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Settings;
+using TachoGraphStudio.Core.Templates;
 
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -43,11 +45,18 @@ public sealed partial class MainWindow : Window
         StageViewModel = new StageViewModel(
             new StagePipeline(new SheetLoader(new WindowsPdfRasterizer())),
             new WriteableBitmapImageSourceFactory());
+
+        TemplateEditorViewModel = new TemplateEditorViewModel(
+            new FileTemplateStore(Path.Combine(localFolderPath, "templates")));
+        TemplateEditor.ViewModel = TemplateEditorViewModel;
+        TemplateEditor.HostWindow = this;
     }
 
     public RosterViewModel RosterViewModel { get; }
 
     public StageViewModel StageViewModel { get; }
+
+    public TemplateEditorViewModel TemplateEditorViewModel { get; }
 
     private async void OnImportSheetsButtonClick(object sender, RoutedEventArgs e)
     {
@@ -96,6 +105,14 @@ public sealed partial class MainWindow : Window
     private async void OnOpenSettingsButtonClick(object sender, RoutedEventArgs e)
     {
         await OpenSettingsDialogAsync();
+    }
+
+    private async void OnOpenTemplateEditorButtonClick(object sender, RoutedEventArgs e)
+    {
+        // 背景はステージで選択中の円盤(なければプレースホルダー円)。開いた時点の画像で固定する
+        TemplateEditor.PreviewBackground = StageViewModel.SelectedDisc?.Preview;
+        TemplateEditorViewModel.IsOpen = true;
+        await TemplateEditorViewModel.LoadAsync();
     }
 
     private async void OnRosterRetryButtonClick(object sender, RoutedEventArgs e)

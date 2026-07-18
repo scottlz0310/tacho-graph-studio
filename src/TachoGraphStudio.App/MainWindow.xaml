@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls"
     xmlns:stage="using:TachoGraphStudio.App.Stage"
+    xmlns:templates="using:TachoGraphStudio.App.Templates"
     xmlns:tv="using:WinUI.TableView">
     <Grid x:Name="RootGrid" Loaded="OnRootGridLoaded" RowDefinitions="Auto,*">
         <Grid.Resources>
@@ -18,10 +19,14 @@
                 VerticalAlignment="Center"
                 Style="{StaticResource SubtitleTextBlockStyle}"
                 Text="TachoGraphStudio" />
-            <Button
+            <StackPanel
                 Grid.Column="1"
-                Click="OnOpenSettingsButtonClick"
-                Content="設定" />
+                Orientation="Horizontal"
+                Spacing="8">
+                <!-- チャート紙様式テンプレートの編集(FR-24) -->
+                <Button Click="OnOpenTemplateEditorButtonClick" Content="テンプレート" />
+                <Button Click="OnOpenSettingsButtonClick" Content="設定" />
+            </StackPanel>
         </Grid>
         <Grid Grid.Row="1" Padding="16,0,16,16">
             <Grid.ColumnDefinitions>
@@ -319,5 +324,11 @@
                 Click="OnCloseFullscreenPreviewClick"
                 Content="閉じる" />
         </Grid>
+        <!-- テンプレート編集オーバーレイ(FR-24) -->
+        <templates:TemplateEditorOverlay
+            x:Name="TemplateEditor"
+            Grid.Row="0"
+            Grid.RowSpan="2"
+            Visibility="{x:Bind TemplateEditorViewModel.IsOpen, Mode=OneWay}" />
     </Grid>
 </Window>
