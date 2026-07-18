@@ -1,0 +1,63 @@
+<UserControl
+    x:Class="TachoGraphStudio.App.Stage.DiscPreviewControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <ScrollViewer
+            x:Name="Scroller"
+            HorizontalScrollBarVisibility="Hidden"
+            HorizontalScrollMode="Enabled"
+            MaxZoomFactor="8"
+            MinZoomFactor="1"
+            SizeChanged="OnScrollerSizeChanged"
+            VerticalScrollBarVisibility="Hidden"
+            VerticalScrollMode="Enabled"
+            ZoomMode="Enabled">
+            <!-- ビューポートと同サイズに保ち、ZoomFactor=1 が「全体表示」になるようにする -->
+            <Grid x:Name="ContentHost">
+                <Image
+                    Margin="12"
+                    RenderTransformOrigin="0.5,0.5"
+                    Source="{x:Bind Source, Mode=OneWay}"
+                    Stretch="Uniform">
+                    <Image.RenderTransform>
+                        <RotateTransform Angle="{x:Bind Angle, Mode=OneWay}" />
+                    </Image.RenderTransform>
+                </Image>
+            </Grid>
+        </ScrollViewer>
+        <!-- 十字ガイド: 画像の回転・ズームと独立した固定レイヤー(FR-06) -->
+        <Rectangle
+            Height="1"
+            VerticalAlignment="Center"
+            Fill="{ThemeResource AccentFillColorDefaultBrush}"
+            IsHitTestVisible="False"
+            Opacity="0.5" />
+        <Rectangle
+            Width="1"
+            HorizontalAlignment="Center"
+            Fill="{ThemeResource AccentFillColorDefaultBrush}"
+            IsHitTestVisible="False"
+            Opacity="0.5" />
+        <StackPanel
+            Margin="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Orientation="Horizontal"
+            Spacing="8">
+            <Button
+                Click="OnZoomInClick"
+                Content="ズーム ＋"
+                ToolTipService.ToolTip="ズームイン" />
+            <Button
+                Click="OnZoomOutClick"
+                Content="ズーム −"
+                ToolTipService.ToolTip="ズームアウト" />
+            <Button
+                Click="OnFullscreenClick"
+                Content="⤢ 拡大"
+                ToolTipService.ToolTip="全画面で拡大表示"
+                Visibility="{x:Bind IsFullscreenButtonVisible, Mode=OneWay}" />
+        </StackPanel>
+    </Grid>
+</UserControl>
