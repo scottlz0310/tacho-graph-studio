@@ -49,35 +49,31 @@ public sealed class StagePipeline : IStagePipeline
                     ? _pdfSplitOptions
                     : _imageSplitOptions;
 
-            ProcessedDisc[] discs = await Task.Run(() => ProcessSheet(sheet, splitOptions), cancellationToken);
-            foreach (ProcessedDisc disc in discs)
+            // 円盤単位で逐次 yield し、後続円盤の失敗時も変換済みの円盤は呼び出し元へ届いた状態にする
+            IReadOnlyList<DiscImage> discs = await Task.Run(
+                () => _splitter.Split(sheet, splitOptions),
+                cancellationToken);
+            try
             {
-                yield return disc;
+                foreach (DiscImage disc in discs)
+                {
+                    yield return await Task.Run(() => ConvertDisc(disc), cancellationToken);
+                }
+            }
+            finally
+            {
+                foreach (DiscImage disc in discs)
+                {
+                    disc.Dispose();
+                }
             }
         }
     }
 
-    private ProcessedDisc[] ProcessSheet(SheetImage sheet, DiscSplitOptions splitOptions)
+    private ProcessedDisc ConvertDisc(DiscImage disc)
     {
-        IReadOnlyList<DiscImage> discs = _splitter.Split(sheet, splitOptions);
-        try
-        {
-            List<ProcessedDisc> processed = [];
-            foreach (DiscImage disc in discs)
-            {
-                using BackgroundRemovalResult removed = _remover.Remove(disc, _removalOptions);
-                processed.Add(ToProcessedDisc(disc, removed));
-            }
-
-            return [.. processed];
-        }
-        finally
-        {
-            foreach (DiscImage disc in discs)
-            {
-                disc.Dispose();
-            }
-        }
+        using BackgroundRemovalResult removed = _remover.Remove(disc, _removalOptions);
+        return ToProcessedDisc(disc, removed);
     }
 
     private static ProcessedDisc ToProcessedDisc(DiscImage disc, BackgroundRemovalResult removed)
