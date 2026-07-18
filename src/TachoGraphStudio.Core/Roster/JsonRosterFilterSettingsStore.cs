@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using TachoGraphStudio.Core.Persistence;
+
 namespace TachoGraphStudio.Core.Roster;
 
 public sealed class JsonRosterFilterSettingsStore : IRosterFilterSettingsStore, IDisposable

@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 
-namespace TachoGraphStudio.Core.Roster;
+namespace TachoGraphStudio.Core.Persistence;
 
-internal sealed class AtomicJsonFile<TDocument> : IDisposable
+public sealed class AtomicJsonFile<TDocument> : IDisposable
     where TDocument : class
 {
     private readonly string _displayName;

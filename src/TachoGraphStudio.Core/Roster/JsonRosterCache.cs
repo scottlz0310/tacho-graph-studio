@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using TachoGraphStudio.Core.Persistence;
+
 namespace TachoGraphStudio.Core.Roster;
 
 public sealed class JsonRosterCache : IRosterCache, IDisposable
