@@ -84,49 +84,6 @@ public sealed partial class MainWindow : Window
         StageViewModel.ResetRotation();
     }
 
-    private bool _isSplitterDragging;
-    private double _splitterDragStartX;
-    private double _sidebarDragStartWidth;
-
-    private void OnSidebarSplitterPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        _isSplitterDragging = SidebarSplitter.CapturePointer(e.Pointer);
-        if (_isSplitterDragging)
-        {
-            _splitterDragStartX = e.GetCurrentPoint(RootGrid).Position.X;
-            _sidebarDragStartWidth = SidebarColumn.ActualWidth;
-            e.Handled = true;
-        }
-    }
-
-    private void OnSidebarSplitterPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (!_isSplitterDragging)
-        {
-            return;
-        }
-
-        double delta = e.GetCurrentPoint(RootGrid).Position.X - _splitterDragStartX;
-        double width = Math.Clamp(
-            _sidebarDragStartWidth + delta,
-            SidebarColumn.MinWidth,
-            SidebarColumn.MaxWidth);
-        SidebarColumn.Width = new GridLength(width);
-        e.Handled = true;
-    }
-
-    private void OnSidebarSplitterPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        if (_isSplitterDragging)
-        {
-            SidebarSplitter.ReleasePointerCapture(e.Pointer);
-        }
-    }
-
-    private void OnSidebarSplitterPointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        _isSplitterDragging = false;
-    }
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
