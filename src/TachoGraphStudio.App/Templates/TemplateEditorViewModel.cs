@@ -26,9 +26,17 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
     private readonly ITemplateStore _store;
     private readonly List<TemplateItemViewModel> _subscribedItems = [];
 
+    // 全画面オーバーレイの表示状態。開閉は view 層(MainWindow / TemplateEditorOverlay)が操作する
+    [ObservableProperty]
+    public partial bool IsOpen { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedTemplate))]
     public partial TemplateItemViewModel? SelectedTemplate { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedField))]
+    public partial TemplateFieldViewModel? SelectedField { get; set; }
 
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
@@ -53,6 +61,8 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
     public ObservableCollection<TemplateItemViewModel> Templates { get; } = [];
 
     public bool HasSelectedTemplate => SelectedTemplate is not null;
+
+    public bool HasSelectedField => SelectedField is not null;
 
     public bool HasError => ErrorMessage is not null;
 
@@ -254,7 +264,29 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
         }
 
         ErrorMessage = null;
-        return SelectedTemplate.AddField(trimmed);
+        TemplateFieldViewModel added = SelectedTemplate.AddField(trimmed);
+        SelectedField = added;
+        return added;
+    }
+
+    public void RemoveSelectedField()
+    {
+        if (SelectedTemplate is null || SelectedField is null)
+        {
+            return;
+        }
+
+        TemplateFieldViewModel removed = SelectedField;
+        int index = SelectedTemplate.Fields.IndexOf(removed);
+        SelectedTemplate.RemoveField(removed);
+        SelectedField = SelectedTemplate.Fields.Count > 0
+            ? SelectedTemplate.Fields[Math.Min(Math.Max(index, 0), SelectedTemplate.Fields.Count - 1)]
+            : null;
+    }
+
+    partial void OnSelectedTemplateChanged(TemplateItemViewModel? value)
+    {
+        SelectedField = value?.Fields.FirstOrDefault();
     }
 
     // Reset(Clear) では OldItems が渡らないため、購読済みリストを基準に張り直す

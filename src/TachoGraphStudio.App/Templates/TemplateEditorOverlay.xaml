@@ -1,0 +1,297 @@
+<UserControl
+    x:Class="TachoGraphStudio.App.Templates.TemplateEditorOverlay"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:templates="using:TachoGraphStudio.App.Templates">
+    <Grid
+        Padding="24"
+        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+        RowDefinitions="Auto,Auto,*"
+        RowSpacing="12">
+        <!-- ヘッダー -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <TextBlock
+                Grid.Column="0"
+                VerticalAlignment="Center"
+                Style="{StaticResource SubtitleTextBlockStyle}"
+                Text="チャート紙様式テンプレートの編集" />
+            <StackPanel
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="8">
+                <ProgressRing
+                    Width="24"
+                    Height="24"
+                    VerticalAlignment="Center"
+                    IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay}" />
+                <Button
+                    Click="OnSaveButtonClick"
+                    Content="保存"
+                    IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}"
+                    Style="{StaticResource AccentButtonStyle}" />
+                <Button Click="OnCloseButtonClick" Content="閉じる" />
+            </StackPanel>
+        </Grid>
+        <!-- エラー・読込警告 -->
+        <StackPanel Grid.Row="1" Spacing="8">
+            <InfoBar
+                IsClosable="True"
+                IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                Severity="Error" />
+            <InfoBar
+                IsClosable="True"
+                IsOpen="{x:Bind ViewModel.HasLoadWarning, Mode=OneWay}"
+                Message="{x:Bind ViewModel.LoadWarningMessage, Mode=OneWay}"
+                Severity="Warning" />
+        </StackPanel>
+        <Grid
+            Grid.Row="2"
+            ColumnDefinitions="260,*,320"
+            ColumnSpacing="12">
+            <!-- テンプレート一覧 -->
+            <Border
+                Grid.Column="0"
+                Padding="12"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                    <StackPanel
+                        Grid.Row="0"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Button Click="OnCreateTemplateButtonClick" Content="新規" />
+                        <Button
+                            Click="OnDuplicateTemplateButtonClick"
+                            Content="複製"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}" />
+                        <Button
+                            Click="OnDeleteTemplateButtonClick"
+                            Content="削除"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}" />
+                    </StackPanel>
+                    <Button
+                        Grid.Row="1"
+                        Click="OnImportButtonClick"
+                        Content="ファイルから追加（旧テンプレート対応）" />
+                    <ListView
+                        Grid.Row="2"
+                        ItemsSource="{x:Bind ViewModel.Templates, Mode=OneWay}"
+                        SelectedItem="{x:Bind ViewModel.SelectedTemplate, Mode=TwoWay}"
+                        SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="templates:TemplateItemViewModel">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Bind Name, Mode=OneWay}" />
+                                    <!-- 未保存マーカー -->
+                                    <TextBlock
+                                        Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                        Text="●"
+                                        Visibility="{x:Bind IsDirty, Mode=OneWay}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
+            <!-- プレビュー（比率座標にフィールドを描画、ドラッグで位置調整） -->
+            <Border
+                Grid.Column="1"
+                Padding="12"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <StackPanel
+                        Grid.Row="0"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <TextBox
+                            MinWidth="160"
+                            Header="テンプレート名"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}"
+                            Text="{x:Bind ViewModel.SelectedTemplate.Name, Mode=TwoWay}" />
+                        <TextBox
+                            MinWidth="200"
+                            Header="説明"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}"
+                            Text="{x:Bind ViewModel.SelectedTemplate.Description, Mode=TwoWay}" />
+                        <NumberBox
+                            MinWidth="110"
+                            Header="参考幅(px)"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}"
+                            Minimum="1"
+                            SpinButtonPlacementMode="Hidden"
+                            Value="{x:Bind ViewModel.SelectedTemplate.ReferenceWidth, Mode=TwoWay}" />
+                        <NumberBox
+                            MinWidth="110"
+                            Header="参考高さ(px)"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}"
+                            Minimum="1"
+                            SpinButtonPlacementMode="Hidden"
+                            Value="{x:Bind ViewModel.SelectedTemplate.ReferenceHeight, Mode=TwoWay}" />
+                    </StackPanel>
+                    <Border
+                        x:Name="PreviewViewport"
+                        Grid.Row="1"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        SizeChanged="OnPreviewViewportSizeChanged">
+                        <Grid
+                            x:Name="PreviewSurface"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                            <!-- 背景: ステージ選択中の円盤があればその画像、なければプレースホルダー円 -->
+                            <Ellipse
+                                Margin="4"
+                                Fill="White"
+                                Opacity="0.9"
+                                Stroke="{ThemeResource CardStrokeColorDefaultBrush}" />
+                            <Image Source="{x:Bind PreviewBackground, Mode=OneWay}" Stretch="Uniform" />
+                            <Canvas x:Name="FieldCanvas" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+            <!-- フィールドプロパティ -->
+            <Border
+                Grid.Column="2"
+                Padding="12"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+                <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="8">
+                    <TextBlock
+                        Grid.Row="0"
+                        FontWeight="SemiBold"
+                        Text="フィールド" />
+                    <Grid
+                        Grid.Row="1"
+                        ColumnDefinitions="*,Auto,Auto"
+                        ColumnSpacing="8">
+                        <TextBox
+                            x:Name="NewFieldNameTextBox"
+                            Grid.Column="0"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}"
+                            KeyDown="OnNewFieldNameTextBoxKeyDown"
+                            PlaceholderText="フィールド名（例: driver）" />
+                        <Button
+                            Grid.Column="1"
+                            Click="OnAddFieldButtonClick"
+                            Content="追加"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}" />
+                        <Button
+                            Grid.Column="2"
+                            Click="OnRemoveFieldButtonClick"
+                            Content="削除"
+                            IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}" />
+                    </Grid>
+                    <ListView
+                        Grid.Row="2"
+                        MaxHeight="160"
+                        ItemsSource="{x:Bind ViewModel.SelectedTemplate.Fields, Mode=OneWay}"
+                        SelectedItem="{x:Bind ViewModel.SelectedField, Mode=TwoWay}"
+                        SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="templates:TemplateFieldViewModel">
+                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" />
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="8">
+                            <TextBox
+                                Header="フィールド名"
+                                IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                Text="{x:Bind ViewModel.SelectedField.Name, Mode=TwoWay}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <NumberBox
+                                    MinWidth="130"
+                                    Header="X（幅比 0〜1）"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                    Maximum="1"
+                                    Minimum="0"
+                                    SmallChange="0.005"
+                                    SpinButtonPlacementMode="Compact"
+                                    Value="{x:Bind ViewModel.SelectedField.XRatio, Mode=TwoWay}" />
+                                <NumberBox
+                                    MinWidth="130"
+                                    Header="Y（高さ比 0〜1）"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                    Maximum="1"
+                                    Minimum="0"
+                                    SmallChange="0.005"
+                                    SpinButtonPlacementMode="Compact"
+                                    Value="{x:Bind ViewModel.SelectedField.YRatio, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBox
+                                    MinWidth="140"
+                                    Header="フォント"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                    Text="{x:Bind ViewModel.SelectedField.FontFamily, Mode=TwoWay}" />
+                                <NumberBox
+                                    MinWidth="140"
+                                    Header="サイズ（短辺比）"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                    Maximum="1"
+                                    Minimum="0.001"
+                                    SmallChange="0.005"
+                                    SpinButtonPlacementMode="Compact"
+                                    Value="{x:Bind ViewModel.SelectedField.SizeRatio, Mode=TwoWay}" />
+                            </StackPanel>
+                            <TextBox
+                                Header="色（#RRGGBB）"
+                                IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                Text="{x:Bind ViewModel.SelectedField.Color, Mode=TwoWay}" />
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <CheckBox
+                                    Content="太字"
+                                    IsChecked="{x:Bind ViewModel.SelectedField.Bold, Mode=TwoWay}"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}" />
+                                <CheckBox
+                                    Content="斜体"
+                                    IsChecked="{x:Bind ViewModel.SelectedField.Italic, Mode=TwoWay}"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ComboBox
+                                    MinWidth="130"
+                                    Header="水平基準"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                    SelectedIndex="{x:Bind ViewModel.SelectedField.AlignIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="左" />
+                                    <ComboBoxItem Content="中央" />
+                                    <ComboBoxItem Content="右" />
+                                </ComboBox>
+                                <ComboBox
+                                    MinWidth="130"
+                                    Header="垂直基準"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}"
+                                    SelectedIndex="{x:Bind ViewModel.SelectedField.VerticalAlignIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="上" />
+                                    <ComboBoxItem Content="中" />
+                                    <ComboBoxItem Content="下" />
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <CheckBox
+                                    Content="表示"
+                                    IsChecked="{x:Bind ViewModel.SelectedField.Visible, Mode=TwoWay}"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}" />
+                                <CheckBox
+                                    Content="必須"
+                                    IsChecked="{x:Bind ViewModel.SelectedField.Required, Mode=TwoWay}"
+                                    IsEnabled="{x:Bind ViewModel.HasSelectedField, Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

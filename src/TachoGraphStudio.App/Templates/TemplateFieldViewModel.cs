@@ -66,6 +66,32 @@ public sealed partial class TemplateFieldViewModel : ObservableObject
     [ObservableProperty]
     public partial bool Required { get; set; }
 
+    // ComboBox の SelectedIndex 用ラッパー。enum の宣言順(Left/Center/Right、Top/Middle/Bottom)と
+    // XAML の項目順を一致させている。-1(未選択)は無視する
+    public int AlignIndex
+    {
+        get => (int)Align;
+        set
+        {
+            if (Enum.IsDefined((TextAlignment)value))
+            {
+                Align = (TextAlignment)value;
+            }
+        }
+    }
+
+    public int VerticalAlignIndex
+    {
+        get => (int)VerticalAlign;
+        set
+        {
+            if (Enum.IsDefined((VerticalTextAlignment)value))
+            {
+                VerticalAlign = (VerticalTextAlignment)value;
+            }
+        }
+    }
+
     // 位置は 0〜1 の比率。範囲外はドラッグで端に張り付くよう 0〜1 にクランプする。
     // NumberBox は空入力で NaN を書き込むため、非有限値は直前の有効値を保持して
     // 変更通知だけ発行する(DiscWorkItem.RotationAngle と同じ)
@@ -143,9 +169,17 @@ public sealed partial class TemplateFieldViewModel : ObservableObject
 
     partial void OnItalicChanged(bool value) => MarkEdited();
 
-    partial void OnAlignChanged(TextAlignment value) => MarkEdited();
+    partial void OnAlignChanged(TextAlignment value)
+    {
+        OnPropertyChanged(nameof(AlignIndex));
+        MarkEdited();
+    }
 
-    partial void OnVerticalAlignChanged(VerticalTextAlignment value) => MarkEdited();
+    partial void OnVerticalAlignChanged(VerticalTextAlignment value)
+    {
+        OnPropertyChanged(nameof(VerticalAlignIndex));
+        MarkEdited();
+    }
 
     partial void OnVisibleChanged(bool value) => MarkEdited();
 
