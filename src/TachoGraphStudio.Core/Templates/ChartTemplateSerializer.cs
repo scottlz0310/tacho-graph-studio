@@ -44,8 +44,20 @@ public static partial class ChartTemplateSerializer
         return JsonSerializer.Serialize(template, Options);
     }
 
+    // JSON の明示的な null は init 既定値を上書きするため、非 null 宣言のプロパティにも
+    // null が入り得る。実装例外を漏らさず TemplateFormatException の契約を維持する
     private static void Validate(ChartTemplate template)
     {
+        if (template.Name is null || template.Version is null || template.Description is null)
+        {
+            throw new TemplateFormatException("name / version / description に null は指定できません。");
+        }
+
+        if (template.Fields is null)
+        {
+            throw new TemplateFormatException("fields に null は指定できません。");
+        }
+
         if (template.ReferenceWidth < 1 || template.ReferenceHeight < 1)
         {
             throw new TemplateFormatException(
@@ -54,6 +66,26 @@ public static partial class ChartTemplateSerializer
 
         foreach ((string name, TextFieldDefinition field) in template.Fields)
         {
+            if (field is null)
+            {
+                throw new TemplateFormatException($"フィールド '{name}' に null は指定できません。");
+            }
+
+            if (field.Position is null)
+            {
+                throw new TemplateFormatException($"フィールド '{name}' の position に null は指定できません。");
+            }
+
+            if (field.Font is null)
+            {
+                throw new TemplateFormatException($"フィールド '{name}' の font に null は指定できません。");
+            }
+
+            if (field.Font.Family is null)
+            {
+                throw new TemplateFormatException($"フィールド '{name}' の family に null は指定できません。");
+            }
+
             if (field.Position.XRatio is < 0.0 or > 1.0 || field.Position.YRatio is < 0.0 or > 1.0)
             {
                 throw new TemplateFormatException(
@@ -66,10 +98,10 @@ public static partial class ChartTemplateSerializer
                     $"フィールド '{name}' の size_ratio は 0 より大きく 1 以下で指定してください: {field.Font.SizeRatio}");
             }
 
-            if (!HexColorRegex().IsMatch(field.Font.Color))
+            if (field.Font.Color is null || !HexColorRegex().IsMatch(field.Font.Color))
             {
                 throw new TemplateFormatException(
-                    $"フィールド '{name}' の color は #RRGGBB 形式で指定してください: {field.Font.Color}");
+                    $"フィールド '{name}' の color は #RRGGBB 形式で指定してください: {field.Font.Color ?? "null"}");
             }
         }
     }

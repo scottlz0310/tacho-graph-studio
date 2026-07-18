@@ -79,6 +79,26 @@ public sealed class ChartTemplateSerializerTests
     }
 
     [Theory]
+    [InlineData("""{"name": null}""", "name")]
+    [InlineData("""{"version": null}""", "name / version")]
+    [InlineData("""{"description": null}""", "description")]
+    [InlineData("""{"fields": null}""", "fields")]
+    [InlineData("""{"fields": {"driver": null}}""", "driver")]
+    [InlineData("""{"fields": {"driver": {"position": null}}}""", "position")]
+    [InlineData("""{"fields": {"driver": {"font": null}}}""", "font")]
+    [InlineData("""{"fields": {"driver": {"font": {"family": null}}}}""", "family")]
+    [InlineData("""{"fields": {"driver": {"font": {"color": null}}}}""", "color")]
+    public void Deserialize_ExplicitNullThrowsTemplateFormatException(string json, string expectedInMessage)
+    {
+        // JSON の明示的な null は init 既定値を上書きするため、実装例外
+        // (NullReferenceException 等)ではなく TemplateFormatException で報告する
+        TemplateFormatException exception = Assert.Throws<TemplateFormatException>(
+            () => ChartTemplateSerializer.Deserialize(json));
+
+        Assert.Contains(expectedInMessage, exception.Message);
+    }
+
+    [Theory]
     [InlineData(1000, 800, 0.5, 0.25, 0.02, 500.0, 200.0, 16.0)]
     [InlineData(800, 1000, 0.5, 0.25, 0.02, 400.0, 250.0, 16.0)]
     [InlineData(2960, 2966, 0.0, 1.0, 0.03, 0.0, 2966.0, 88.8)]
