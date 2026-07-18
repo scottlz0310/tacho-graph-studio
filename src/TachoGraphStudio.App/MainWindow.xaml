@@ -2,6 +2,7 @@
     x:Class="TachoGraphStudio.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:stage="using:TachoGraphStudio.App.Stage"
     xmlns:tv="using:WinUI.TableView">
     <Grid x:Name="RootGrid" Loaded="OnRootGridLoaded" RowDefinitions="Auto,*">
         <Grid.Resources>
@@ -161,13 +162,93 @@
                         Visibility="{x:Bind RosterViewModel.IsGridVisible, Mode=OneWay}" />
                 </Grid>
             </Border>
-            <!-- ステージ（Phase 3 以降で実装） -->
-            <Grid Grid.Column="1">
-                <TextBlock
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Style="{StaticResource TitleTextBlockStyle}"
-                    Text="TachoGraphStudio" />
+            <!-- ステージ（FR-04: サムネイルナビ＋プレビュー） -->
+            <Grid
+                Grid.Column="1"
+                RowDefinitions="Auto,Auto,Auto,*"
+                RowSpacing="12">
+                <StackPanel
+                    Grid.Row="0"
+                    Orientation="Horizontal"
+                    Spacing="12">
+                    <Button
+                        Click="OnImportSheetsButtonClick"
+                        Content="シート取込（PDF / JPEG）"
+                        IsEnabled="{x:Bind StageViewModel.IsImportEnabled, Mode=OneWay}"
+                        Style="{StaticResource AccentButtonStyle}" />
+                    <ProgressRing
+                        Width="24"
+                        Height="24"
+                        VerticalAlignment="Center"
+                        IsActive="{x:Bind StageViewModel.IsImporting, Mode=OneWay}"
+                        Visibility="{x:Bind StageViewModel.IsImporting, Mode=OneWay}" />
+                </StackPanel>
+                <InfoBar
+                    Grid.Row="1"
+                    IsClosable="True"
+                    IsOpen="{x:Bind StageViewModel.HasImportError, Mode=OneWay}"
+                    Message="{x:Bind StageViewModel.ImportError, Mode=OneWay}"
+                    Severity="Error"
+                    Title="シート取込に失敗しました" />
+                <ListView
+                    Grid.Row="2"
+                    ItemsSource="{x:Bind StageViewModel.Discs}"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                    ScrollViewer.HorizontalScrollMode="Enabled"
+                    ScrollViewer.VerticalScrollMode="Disabled"
+                    SelectedItem="{x:Bind StageViewModel.SelectedDisc, Mode=TwoWay}"
+                    SelectionMode="Single">
+                    <ListView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsStackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListView.ItemsPanel>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="stage:DiscWorkItem">
+                            <StackPanel
+                                Width="96"
+                                Padding="4,8"
+                                Spacing="4">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontWeight="SemiBold"
+                                    Text="{x:Bind Label}" />
+                                <Border
+                                    Width="72"
+                                    Height="72"
+                                    HorizontalAlignment="Center"
+                                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                    CornerRadius="4">
+                                    <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" />
+                                </Border>
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind StatusLabel, Mode=OneWay}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <Border
+                    Grid.Row="3"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <Grid>
+                        <Image
+                            Margin="12"
+                            Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}"
+                            Stretch="Uniform" />
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="シートを取り込むと円盤のプレビューが表示されます"
+                            Visibility="{x:Bind StageViewModel.IsEmptyStateVisible, Mode=OneWay}" />
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
     </Grid>

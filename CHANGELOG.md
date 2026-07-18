@@ -32,6 +32,7 @@
 - `Core.Imaging`: 円盤の自動検出・分割（FR-03）。`SheetSplitter` が GIMP 版 `split_by_auto_detect` の実績値（threshold=15・padding=20px・円盤径 123.5mm・最小サイズ=径の 2/3・解析長辺 1200px）を移植し、しきい値・パディング・最大枚数・DPI を `DiscSplitOptions` で調整可能にする。OpenCvSharp4 はこの変更で導入
 - `Core.Imaging`: 充填率フィルタ（`MinFillRatio`、既定 0.4）。スキャナ縁の黒帯がページを一周し bbox がシート全体になる誤検出（実スキャンで fill=0.013、実円盤は 0.77 前後）を除外する
 - `Core.Imaging`: 背景除去（FR-05）。`BackgroundRemover` が前景輪郭への楕円フィット（`Cv2.FitEllipse`）で白地背景を除去し BGRA へアルファ化、楕円 bbox へクロップする。しきい値・楕円パディングは `BackgroundRemovalOptions` で調整可能。フィット楕円（`RotatedRect`）は回転補正の十字ガイド基準（FR-06）用に結果へ公開する
+- App: ステージ UI 第 1 弾（FR-04）。「シート取込」ボタン（`FileOpenPicker`、PDF/JPEG 複数選択）から読込→分割→背景除去のパイプライン（`StagePipeline`）を通し、円盤をサムネイルナビ（No.1〜・未処理/処理済み/スキップ表示）へ逐次展開、選択円盤を透過プレビュー表示する。ズーム・十字ガイド・回転補正は第 2 弾で実装
 
 ### Changed
 
