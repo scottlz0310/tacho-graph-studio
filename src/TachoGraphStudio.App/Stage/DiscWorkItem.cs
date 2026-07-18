@@ -48,6 +48,9 @@ public sealed partial class DiscWorkItem : ObservableObject
     // 表示用の 1 始まり連番(No.1〜)
     public int Number { get; }
 
+    // 文字入れメタデータ(FR-13〜15, FR-17)。円盤ごとに保持する
+    public DiscMetadata Metadata { get; } = new();
+
     public ProcessedDisc Disc { get; }
 
     public string Label => $"No.{Number}";

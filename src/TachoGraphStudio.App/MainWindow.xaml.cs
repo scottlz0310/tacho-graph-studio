@@ -42,14 +42,36 @@ public sealed partial class MainWindow : Window
             new JsonRosterFilterSettingsStore(
                 Path.Combine(localFolderPath, "settings", "roster-filter.json")));
 
+        FileTemplateStore templateStore = new(Path.Combine(localFolderPath, "templates"));
+
         StageViewModel = new StageViewModel(
             new StagePipeline(new SheetLoader(new WindowsPdfRasterizer())),
-            new WriteableBitmapImageSourceFactory());
+            new WriteableBitmapImageSourceFactory(),
+            templateStore);
 
-        TemplateEditorViewModel = new TemplateEditorViewModel(
-            new FileTemplateStore(Path.Combine(localFolderPath, "templates")));
+        TemplateEditorViewModel = new TemplateEditorViewModel(templateStore);
         TemplateEditor.ViewModel = TemplateEditorViewModel;
         TemplateEditor.HostWindow = this;
+
+        // 名簿の行選択を選択中円盤のメタデータへ反映する(FR-13)
+        RosterViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RosterViewModel.SelectedEntry)
+                && RosterViewModel.SelectedEntry is { } entry)
+            {
+                StageViewModel.ApplyRosterEntry(entry);
+            }
+        };
+
+        // テンプレート編集を閉じたら様式一覧へ反映する(FR-16)
+        TemplateEditorViewModel.PropertyChanged += async (_, e) =>
+        {
+            if (e.PropertyName == nameof(TemplateEditorViewModel.IsOpen)
+                && !TemplateEditorViewModel.IsOpen)
+            {
+                await StageViewModel.LoadTemplatesAsync();
+            }
+        };
     }
 
     public RosterViewModel RosterViewModel { get; }
@@ -99,6 +121,7 @@ public sealed partial class MainWindow : Window
         await RosterViewModel.LoadFilterSettingsAsync();
         ApplyFilterSettingsToControls();
 
+        await StageViewModel.LoadTemplatesAsync();
         await RefreshSupabaseConnectionAsync(promptIfUnset: true);
     }
 
