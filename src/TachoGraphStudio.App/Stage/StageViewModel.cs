@@ -98,9 +98,12 @@ public sealed partial class StageViewModel : ObservableObject
         metadata.VehicleType = entry.VehicleType;
     }
 
-    // テンプレート一覧の読込(FR-16)。一部の読込失敗は警告に留め、名簿・ステージ機能は継続する
+    // テンプレート一覧の読込(FR-16)。一部の読込失敗は警告に留め、名簿・ステージ機能は継続する。
+    // 再読込では選択中の様式(Id)を維持し、削除されていた場合のみ先頭へフォールバックする
     public async Task LoadTemplatesAsync(CancellationToken cancellationToken = default)
     {
+        string? previousSelectedId = SelectedTemplate?.Id;
+
         TemplateWarning = null;
         Templates.Clear();
         SelectedTemplate = null;
@@ -121,7 +124,8 @@ public sealed partial class StageViewModel : ObservableObject
                         failure => $"{failure.FileName}({failure.Message})"));
             }
 
-            SelectedTemplate = Templates.FirstOrDefault();
+            SelectedTemplate = Templates.FirstOrDefault(stored => stored.Id == previousSelectedId)
+                ?? Templates.FirstOrDefault();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

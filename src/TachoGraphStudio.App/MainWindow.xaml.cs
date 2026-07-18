@@ -53,15 +53,9 @@ public sealed partial class MainWindow : Window
         TemplateEditor.ViewModel = TemplateEditorViewModel;
         TemplateEditor.HostWindow = this;
 
-        // 名簿の行選択を選択中円盤のメタデータへ反映する(FR-13)
-        RosterViewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(RosterViewModel.SelectedEntry)
-                && RosterViewModel.SelectedEntry is { } entry)
-            {
-                StageViewModel.ApplyRosterEntry(entry);
-            }
-        };
+        // 名簿の行選択・再クリックを選択中円盤のメタデータへ反映する(FR-13)。
+        // 選択変更に依存しないため、同じ行を複数の円盤へ続けて適用できる
+        RosterViewModel.EntryActivated += (_, entry) => StageViewModel.ApplyRosterEntry(entry);
 
         // テンプレート編集を閉じたら様式一覧へ反映する(FR-16)
         TemplateEditorViewModel.PropertyChanged += async (_, e) =>
@@ -141,6 +135,13 @@ public sealed partial class MainWindow : Window
     private async void OnRosterRetryButtonClick(object sender, RoutedEventArgs e)
     {
         await RosterViewModel.RefreshAsync();
+    }
+
+    // 選択済み行の再クリックでも名簿を再適用できるようにする(FR-13)。
+    // 選択変更時は OnSelectedEntryChanged 経由と重複するが、適用は冪等なので問題ない
+    private void OnRosterDataGridTapped(object sender, TappedRoutedEventArgs e)
+    {
+        RosterViewModel.ActivateSelectedEntry();
     }
 
     private void OnSeasonComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -22,7 +22,27 @@ public sealed partial class RosterViewModel : ObservableObject
         _filterSettingsStore = filterSettingsStore;
     }
 
+    // 名簿行の「適用」通知(FR-13)。選択変更に加え、選択済み行の再クリック
+    // (ActivateSelectedEntry)でも発火し、同じ行を複数の円盤へ続けて適用できる
+    public event EventHandler<RosterEntry>? EntryActivated;
+
     public ObservableCollection<RosterEntry> Entries { get; } = [];
+
+    public void ActivateSelectedEntry()
+    {
+        if (SelectedEntry is { } entry)
+        {
+            EntryActivated?.Invoke(this, entry);
+        }
+    }
+
+    partial void OnSelectedEntryChanged(RosterEntry? value)
+    {
+        if (value is not null)
+        {
+            EntryActivated?.Invoke(this, value);
+        }
+    }
 
     [ObservableProperty]
     public partial string ControlNumberJumpText { get; set; } = string.Empty;

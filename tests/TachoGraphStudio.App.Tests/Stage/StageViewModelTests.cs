@@ -258,6 +258,39 @@ public sealed class StageViewModelTests
     }
 
     [Fact]
+    public async Task LoadTemplatesAsync_ReloadPreservesSelectionById()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        viewModel.SelectedTemplate = viewModel.Templates[1];
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
+    }
+
+    [Fact]
+    public async Task LoadTemplatesAsync_DeletedSelectionFallsBackToFirst()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        viewModel.SelectedTemplate = viewModel.Templates[1];
+        await store.DeleteAsync("Yazaki45");
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.Equal("Task-Meter", viewModel.SelectedTemplate?.Id);
+    }
+
+    [Fact]
     public async Task LoadTemplatesAsync_StoreFailureBecomesWarning()
     {
         FakeTemplateStore store = new() { NextException = new IOException("ディスクエラー") };

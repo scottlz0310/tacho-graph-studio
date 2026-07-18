@@ -34,6 +34,7 @@ public sealed class ChartTextComposerTests
     [InlineData("2026-12-25", "2026", "12", "25")]
     [InlineData("2026.12.25", "2026", "12", "25")]
     [InlineData("R8/12/25", "R8", "12", "25")]
+    [InlineData("2026 / 12 / 25", "2026", "12", "25")]
     public void Compose_SplitsDateTextOnCommonSeparators(
         string dateText, string year, string month, string day)
     {
@@ -57,6 +58,19 @@ public sealed class ChartTextComposerTests
             template, Values with { DateText = dateText }, 1000, 1000);
 
         Assert.DoesNotContain("date_day", result.Select(placed => placed.FieldName));
+    }
+
+    // 手修正途中の「2026//25」で日が月へずれない(空要素は位置を保って省略される)
+    [Fact]
+    public void Compose_KeepsDatePartPositionsWhenMiddlePartIsEmpty()
+    {
+        ChartTemplate template = BuildTemplate("date_year", "date_month", "date_day");
+
+        IReadOnlyList<PlacedText> result = ChartTextComposer.Compose(
+            template, Values with { DateText = "2026//25" }, 1000, 1000);
+
+        Assert.Equal(["date_day", "date_year"], result.Select(placed => placed.FieldName));
+        Assert.Equal(["25", "2026"], result.Select(placed => placed.Text));
     }
 
     [Fact]

@@ -129,6 +129,47 @@ public sealed class RosterViewModelTests
         Assert.Single(viewModel.Entries);
     }
 
+    [Fact]
+    public void SelectedEntryChange_RaisesEntryActivated()
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        RosterEntry entry = new() { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true };
+        List<RosterEntry> activated = [];
+        viewModel.EntryActivated += (_, activatedEntry) => activated.Add(activatedEntry);
+
+        viewModel.SelectedEntry = entry;
+        viewModel.SelectedEntry = null;
+
+        Assert.Equal([entry], activated);
+    }
+
+    [Fact]
+    public void ActivateSelectedEntry_RaisesEventForSameEntryAgain()
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        RosterEntry entry = new() { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true };
+        List<RosterEntry> activated = [];
+        viewModel.EntryActivated += (_, activatedEntry) => activated.Add(activatedEntry);
+        viewModel.SelectedEntry = entry;
+
+        // 同じ行の再クリック(選択変更なし)でも再適用できる(FR-13)
+        viewModel.ActivateSelectedEntry();
+
+        Assert.Equal([entry, entry], activated);
+    }
+
+    [Fact]
+    public void ActivateSelectedEntry_WithoutSelectionDoesNothing()
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        int activatedCount = 0;
+        viewModel.EntryActivated += (_, _) => activatedCount++;
+
+        viewModel.ActivateSelectedEntry();
+
+        Assert.Equal(0, activatedCount);
+    }
+
     private sealed class ThrowingFilterSettingsStore : IRosterFilterSettingsStore
     {
         private readonly Exception _readException;

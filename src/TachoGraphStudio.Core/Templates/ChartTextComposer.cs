@@ -4,7 +4,7 @@ namespace TachoGraphStudio.Core.Templates;
 // プレビューの文字レイヤー(#13)と確定保存の本合成(#14)が共有する
 public static class ChartTextComposer
 {
-    private static readonly char[] DateSeparators = ['/', '-', '.', ' '];
+    private static readonly char[] DateSeparators = ['/', '-', '.'];
 
     // 表示対象(visible かつ値が空でない)のフィールドをキー順に返す
     public static IReadOnlyList<PlacedText> Compose(
@@ -49,10 +49,11 @@ public static class ChartTextComposer
         _ => null,
     };
 
+    // 空要素を詰めると「2026//25」の日が月へずれるため、位置を保ったまま分解し空要素は null にする
     private static string? DatePart(string dateText, int index)
     {
-        string[] parts = dateText.Split(DateSeparators, StringSplitOptions.RemoveEmptyEntries);
-        return index < parts.Length ? parts[index] : null;
+        string[] parts = dateText.Split(DateSeparators, StringSplitOptions.TrimEntries);
+        return index < parts.Length && parts[index].Length > 0 ? parts[index] : null;
     }
 }
 
