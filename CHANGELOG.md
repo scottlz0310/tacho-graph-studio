@@ -27,6 +27,8 @@
 - `Core.Settings`: `ISecretStore.TryWriteAsync` 拡張メソッド。DPAPI・ディスク書き込み失敗時に例外を伝播させず呼び出し元へ通知する
 - App: 名簿サイドバー UI（`WinUI.TableView` によるグリッド、シーズン・タコ対象フィルタ、キーワード検索、管理番号ジャンプ）。行クリック選択・選択行ハイライトに対応(UR-01, UR-02)
 - App: `RosterViewModel`（`CommunityToolkit.Mvvm`）。名簿の取得・フィルタ適用・選択状態・読み込み中/エラー/未接続の表示状態を管理し、シーズン・タコ対象フィルタの変更をローカル永続化と連動させる
+- `Core.Imaging`: シート読込（FR-01, FR-02）。`SheetLoader` が JPEG / PDF（複数ページ）/ 複数ファイルのバッチ投入を `IAsyncEnumerable<SheetImage>` で逐次供給する。Core はエンコード済み画像バイト列のみを扱い、デコードは円盤分割（issue #8, OpenCvSharp）に委ねる
+- App: `WindowsPdfRasterizer`。`Windows.Data.Pdf`（OS 標準）による `IPdfRasterizer` 実装。既定 600dpi でページをラスタライズする（NFR-03）
 
 ### Changed
 
