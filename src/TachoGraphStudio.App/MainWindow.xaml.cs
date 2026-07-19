@@ -43,7 +43,11 @@ public sealed partial class MainWindow : Window
 
         _appStateStore = new JsonAppStateStore(
             Path.Combine(localFolderPath, "settings", "app-state.json"));
-        AppStateSaver = new AppStateSaver(_appStateStore);
+        // 変更通知(InfoBar の DP 更新)を UI スレッドへ marshal する。終了時 flush は
+        // ワーカースレッドで走るため必須。キュー停止後(シャットダウン中)は通知を破棄する
+        AppStateSaver = new AppStateSaver(
+            _appStateStore,
+            action => DispatcherQueue.TryEnqueue(() => action()));
 
         _secretStore = new DpapiSecretStore(
             Path.Combine(localCacheFolderPath, "secrets", "supabase.secret.json"));

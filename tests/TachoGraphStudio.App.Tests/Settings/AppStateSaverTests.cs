@@ -68,6 +68,59 @@ public sealed class AppStateSaverTests
     }
 
     [Fact]
+    public async Task PropertyChanged_IsAlwaysRaisedThroughNotificationDispatcher()
+    {
+        FakeAppStateStore store = new() { WriteException = new IOException("書き込み失敗") };
+        bool inDispatcher = false;
+        AppStateSaver saver = new(store, action =>
+        {
+            inDispatcher = true;
+            try
+            {
+                action();
+            }
+            finally
+            {
+                inDispatcher = false;
+            }
+        });
+        // 購読側(x:Bind → InfoBar)は UI スレッド相当のディスパッチャ内でのみ呼ばれること
+        saver.PropertyChanged += (_, _) => Assert.True(inDispatcher);
+
+        await saver.TrySaveAsync(new AppState());
+        store.WriteException = null;
+        await saver.TrySaveAsync(new AppState());
+
+        Assert.Null(saver.LastError);
+    }
+
+    [Fact]
+    public void TryFlush_WorkerThreadFailureDefersNotificationAndDoesNotThrow()
+    {
+        FakeAppStateStore store = new() { WriteException = new IOException("ディスクエラー") };
+        List<Action> deferred = [];
+        // UI スレッドが Wait でブロック中の間、通知はキューに積まれるだけで実行されない
+        AppStateSaver saver = new(store, deferred.Add);
+        int workerThreadNotifications = 0;
+        saver.PropertyChanged += (_, _) => workerThreadNotifications++;
+
+        bool flushed = saver.TryFlush(new AppState(), TimeSpan.FromSeconds(5));
+
+        // ワーカースレッドから同期発火せず、fault も UI スレッドへ throw しない
+        Assert.False(flushed);
+        Assert.Equal(0, workerThreadNotifications);
+
+        // ディスパッチャ(UI スレッド)実行後に InfoBar へ反映される
+        foreach (Action action in deferred)
+        {
+            action();
+        }
+
+        Assert.True(saver.HasError);
+        Assert.Contains("ディスクエラー", saver.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TryFlush_WriteFailureReturnsFalseWithoutThrowing()
     {
         FakeAppStateStore store = new() { WriteException = new IOException("ディスクエラー") };
