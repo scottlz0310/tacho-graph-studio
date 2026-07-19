@@ -351,6 +351,7 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
         await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[0].Metadata.RegistrationNumber = "旭川123-45";
         viewModel.Discs[0].Metadata.DriverName = "山田 太郎";
@@ -392,6 +393,7 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
         await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[1].Status = DiscStatus.Done;
 
@@ -408,6 +410,7 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1), BuildDisc(2)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
         await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[1].Status = DiscStatus.Done;
         viewModel.Discs[2].Status = DiscStatus.Done;
@@ -440,6 +443,7 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
         await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectedTemplate = BuildStoredTemplate();
         // 保存先パスをディレクトリで塞ぎ、書き込みを失敗させる
         viewModel.OutputDirectory = _temporaryDirectory;
         Directory.CreateDirectory(Path.Combine(_temporaryDirectory, "20260719__.png"));
@@ -474,6 +478,78 @@ public sealed class StageViewModelTests : IDisposable
         Assert.Contains("20260719__山田 太郎.png", viewModel.SaveTargetLabel, StringComparison.Ordinal);
         Assert.Contains(_temporaryDirectory, viewModel.SaveTargetLabel, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task SaveAndAdvanceAsync_WithoutTemplateAndNotSkippedIsRejected()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.OutputDirectory = _temporaryDirectory;
+
+        // 様式未選択かつ手書きスキップでない場合、文字なし PNG を成功扱いで保存しない
+        Assert.False(viewModel.CanSave);
+        bool saved = await viewModel.SaveAndAdvanceAsync();
+
+        Assert.False(saved);
+        Assert.Equal(DiscStatus.Pending, viewModel.Discs[0].Status);
+        // 保存が拒否されるため出力先へは何も書かれない(ディレクトリ作成もされない)
+        Assert.False(Directory.Exists(_temporaryDirectory));
+
+        // 手書きスキップなら様式なしでも保存できる(FR-17)
+        viewModel.SkipHandwritten = true;
+        Assert.True(viewModel.CanSave);
+    }
+
+    [Fact]
+    public async Task SaveAndAdvanceAsync_UsesSnapshotTakenBeforeAwait()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectedTemplate = BuildStoredTemplate();
+        viewModel.OutputDirectory = _temporaryDirectory;
+        viewModel.Discs[0].Metadata.DriverName = "山田 太郎";
+
+        // スナップショットは最初の await より前に同期的に取られるため、
+        // 開始直後の編集は合成にもファイル名にも混ざらない
+        Task<bool> saving = viewModel.SaveAndAdvanceAsync();
+        viewModel.Discs[0].Metadata.DriverName = "編集後";
+        bool saved = await saving;
+
+        Assert.True(saved);
+        Assert.True(File.Exists(Path.Combine(_temporaryDirectory, "20260719__山田 太郎.png")));
+        Assert.False(File.Exists(Path.Combine(_temporaryDirectory, "20260719__編集後.png")));
+    }
+
+    [Fact]
+    public async Task SaveAndAdvanceAsync_FailedReplaceKeepsExistingFile()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectedTemplate = BuildStoredTemplate();
+        viewModel.OutputDirectory = _temporaryDirectory;
+        Directory.CreateDirectory(_temporaryDirectory);
+        string targetPath = Path.Combine(_temporaryDirectory, "20260719__.png");
+        await File.WriteAllTextAsync(targetPath, "既存の成果物");
+
+        bool saved;
+        // 既存ファイルをロックして置換(Move)を失敗させる
+        await using (FileStream _ = new(targetPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            saved = await viewModel.SaveAndAdvanceAsync();
+        }
+
+        Assert.False(saved);
+        Assert.True(viewModel.HasSaveError);
+        // 途中失敗しても既存の成果物は破損しない
+        Assert.Equal("既存の成果物", await File.ReadAllTextAsync(targetPath));
+        Assert.Empty(Directory.EnumerateFiles(_temporaryDirectory, "*.tmp"));
+        Assert.Equal(DiscStatus.Pending, viewModel.Discs[0].Status);
+    }
+
+    private static StoredTemplate BuildStoredTemplate() => new("T", BuildTemplate("T"));
 
     private static ChartTemplate BuildTemplate(string name) => new()
     {

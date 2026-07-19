@@ -59,10 +59,12 @@ public sealed partial class StageViewModel : ObservableObject
 
     // 手書きスキップ(FR-17)。トップバーで一括指定し全円盤に適用する(アーキテクチャ §4)
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial bool SkipHandwritten { get; set; }
 
     // チャート紙様式の選択(FR-16)。文字入れ位置はテンプレート定義に従う
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial StoredTemplate? SelectedTemplate { get; set; }
 
     [ObservableProperty]
@@ -99,7 +101,12 @@ public sealed partial class StageViewModel : ObservableObject
 
     public bool HasSaveError => SaveError is not null;
 
-    public bool CanSave => SelectedDisc is not null && OutputDirectory is not null && !IsSaving;
+    // 文字なし保存は手書きスキップ時のみ許可する(FR-17)。様式未選択のまま
+    // 文字なし PNG を成功扱いで保存しない
+    public bool CanSave => SelectedDisc is not null
+        && OutputDirectory is not null
+        && !IsSaving
+        && (SkipHandwritten || SelectedTemplate is not null);
 
     // 保存前のファイル名プレビュー(FR-20)。メタデータの編集にリアルタイム追従する
     public string SaveTargetLabel
@@ -190,28 +197,37 @@ public sealed partial class StageViewModel : ObservableObject
             return false;
         }
 
+        // 保存中の編集が結果に混ざらないよう、合成入力とファイル名は最初の await より前に
+        // 同一スナップショットへ固定する
+        DiscMetadata metadata = item.Metadata;
+        bool skipHandwritten = metadata.SkipHandwritten;
+        ChartTemplate? template = skipHandwritten ? null : SelectedTemplate?.Template;
+
+        // 文字なし合成は手書きスキップ時のみ許可する(FR-17)。様式未選択の保存は拒否
+        if (!skipHandwritten && template is null)
+        {
+            return false;
+        }
+
+        ChartTextValues? values = skipHandwritten ? null : metadata.ToTextValues();
+        string fileName = OutputNaming.CreateFileName(
+            metadata.PrintDate,
+            metadata.RegistrationNumber,
+            metadata.DriverName,
+            skipHandwritten);
+        double angle = item.RotationAngle;
+        ProcessedDisc disc = item.Disc;
+
         IsSaving = true;
         SaveError = null;
         try
         {
-            DiscMetadata metadata = item.Metadata;
-            ChartTemplate? template = metadata.SkipHandwritten ? null : SelectedTemplate?.Template;
-            ChartTextValues? values = metadata.SkipHandwritten ? null : metadata.ToTextValues();
-            double angle = item.RotationAngle;
-            ProcessedDisc disc = item.Disc;
-
             byte[] png = await Task.Run(
                 () => DiscComposer.ComposePng(disc.Bgra, disc.Width, disc.Height, angle, template, values),
                 cancellationToken);
 
-            string fileName = OutputNaming.CreateFileName(
-                metadata.PrintDate,
-                metadata.RegistrationNumber,
-                metadata.DriverName,
-                metadata.SkipHandwritten);
             Directory.CreateDirectory(outputDirectory);
-            await File.WriteAllBytesAsync(
-                Path.Combine(outputDirectory, fileName), png, cancellationToken);
+            await ReplaceFileAsync(Path.Combine(outputDirectory, fileName), png, cancellationToken);
 
             item.Status = DiscStatus.Done;
             AdvanceToNextDisc(item);
@@ -225,6 +241,34 @@ public sealed partial class StageViewModel : ObservableObject
         finally
         {
             IsSaving = false;
+        }
+    }
+
+    // 同一ディレクトリの一時ファイルへ書き切ってから置換し、途中失敗で既存の成果物を
+    // 破損させない(AtomicJsonFile と同じ一時ファイル + Move パターン)
+    private static async Task ReplaceFileAsync(
+        string filePath,
+        byte[] content,
+        CancellationToken cancellationToken)
+    {
+        string temporaryFilePath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllBytesAsync(temporaryFilePath, content, cancellationToken);
+            File.Move(temporaryFilePath, filePath, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(temporaryFilePath);
+            }
+            catch (IOException)
+            {
+                // 元例外を優先する。孤児 .tmp は次回保存の障害にならない
+            }
+
+            throw;
         }
     }
 
