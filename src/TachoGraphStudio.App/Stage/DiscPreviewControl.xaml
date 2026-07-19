@@ -5,12 +5,12 @@
     <Grid>
         <ScrollViewer
             x:Name="Scroller"
-            HorizontalScrollBarVisibility="Hidden"
+            HorizontalScrollBarVisibility="Auto"
             HorizontalScrollMode="Enabled"
             MaxZoomFactor="8"
             MinZoomFactor="1"
             SizeChanged="OnScrollerSizeChanged"
-            VerticalScrollBarVisibility="Hidden"
+            VerticalScrollBarVisibility="Auto"
             VerticalScrollMode="Enabled"
             ZoomMode="Enabled">
             <!-- ビューポートと同サイズに保ち、ZoomFactor=1 が「全体表示」になるようにする -->
@@ -32,21 +32,21 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     IsHitTestVisible="False" />
+                <!-- 十字ガイド(FR-06): 画像の回転とは独立し、ズーム・スクロールには追従する -->
+                <Rectangle
+                    Height="1"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                    IsHitTestVisible="False"
+                    Opacity="0.5" />
+                <Rectangle
+                    Width="1"
+                    HorizontalAlignment="Center"
+                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                    IsHitTestVisible="False"
+                    Opacity="0.5" />
             </Grid>
         </ScrollViewer>
-        <!-- 十字ガイド: 画像の回転・ズームと独立した固定レイヤー(FR-06) -->
-        <Rectangle
-            Height="1"
-            VerticalAlignment="Center"
-            Fill="{ThemeResource AccentFillColorDefaultBrush}"
-            IsHitTestVisible="False"
-            Opacity="0.5" />
-        <Rectangle
-            Width="1"
-            HorizontalAlignment="Center"
-            Fill="{ThemeResource AccentFillColorDefaultBrush}"
-            IsHitTestVisible="False"
-            Opacity="0.5" />
         <StackPanel
             Margin="12"
             HorizontalAlignment="Right"
