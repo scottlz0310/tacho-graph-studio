@@ -310,7 +310,7 @@
         </div>
         <div>
             <input type="checkbox" id="skip-text" onchange="toggleSkip()">
-            <label for="skip-text">✍️ 手書きのため自動文字入れをスキップ</label>
+            <label for="skip-text">✍️ 手書きスキップを全円盤へ適用</label>
         </div>
     </div>
 
@@ -397,6 +397,11 @@
                         <label>運転者名 (臨時手修正可)</label>
                         <input type="text" id="edit-driver" value="山田 太郎" oninput="updateCanvas()">
                     </div>
+                    <div class="field-box">
+                        <label for="disc-skip-text">手書き設定</label>
+                        <input type="checkbox" id="disc-skip-text" onchange="updateCanvas()">
+                        <label for="disc-skip-text">この円盤は手書き</label>
+                    </div>
                 </div>
                 
                 <div class="action-bar">
@@ -435,7 +440,7 @@
         }
 
         function updateCanvas() {
-            const isSkip = document.getElementById('skip-text').checked;
+            const isSkip = document.getElementById('disc-skip-text').checked;
             const textEl = document.getElementById('overlay-text');
             
             const date = document.getElementById('edit-date').value;
@@ -450,11 +455,14 @@
             }
 
             const cleanDate = date.replace(/\//g, '');
-            const nameSuffix = isSkip ? "手書き" : driver;
-            document.getElementById('file-preview').innerText = `保存先: [ローカル] ${cleanDate}_${carNo}_${nameSuffix}.png`;
+            const handwrittenSuffix = isSkip ? "_手書き" : "";
+            document.getElementById('file-preview').innerText = `保存先: [ローカル] ${cleanDate}_${carNo}_${driver}${handwrittenSuffix}.png`;
         }
 
-        function toggleSkip() { updateCanvas(); }
+        function toggleSkip() {
+            document.getElementById('disc-skip-text').checked = document.getElementById('skip-text').checked;
+            updateCanvas();
+        }
         
         function changeTemplateLayout() {
             const type = document.getElementById('template-select').value;

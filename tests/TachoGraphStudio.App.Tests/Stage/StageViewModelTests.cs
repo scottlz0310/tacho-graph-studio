@@ -218,6 +218,32 @@ public sealed class StageViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task IndividualSkipHandwrittenChange_AffectsSelectedDiscOnlyAndCanSave()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.OutputDirectory = _temporaryDirectory;
+        viewModel.Discs[0].Metadata.DriverName = "山田 太郎";
+        List<string?> changedProperties = [];
+        viewModel.PropertyChanged += (_, e) => changedProperties.Add(e.PropertyName);
+
+        viewModel.Discs[0].Metadata.SkipHandwritten = true;
+
+        Assert.True(viewModel.CanSave);
+        Assert.Contains(nameof(StageViewModel.CanSave), changedProperties);
+        Assert.Contains(nameof(StageViewModel.SaveTargetLabel), changedProperties);
+        Assert.Contains("20260719__山田 太郎_手書き.png", viewModel.SaveTargetLabel, StringComparison.Ordinal);
+        Assert.True(viewModel.Discs[0].Metadata.SkipHandwritten);
+        Assert.False(viewModel.Discs[1].Metadata.SkipHandwritten);
+        Assert.False(viewModel.SkipHandwritten);
+
+        viewModel.SelectedDisc = viewModel.Discs[1];
+
+        Assert.False(viewModel.CanSave);
+    }
+
+    [Fact]
     public async Task ApplyRosterEntry_UpdatesSelectedDiscOnly()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
@@ -574,7 +600,7 @@ public sealed class StageViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAndAdvanceAsync_SkipHandwrittenUsesHandwrittenDriverPart()
+    public async Task SaveAndAdvanceAsync_SkipHandwrittenRetainsDriverAndAddsSuffix()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
@@ -587,7 +613,9 @@ public sealed class StageViewModelTests : IDisposable
         bool saved = await viewModel.SaveAndAdvanceAsync();
 
         Assert.True(saved);
-        Assert.True(File.Exists(Path.Combine(_temporaryDirectory, "20260719_旭川123-45_手書き.png")));
+        Assert.True(File.Exists(Path.Combine(
+            _temporaryDirectory,
+            "20260719_旭川123-45_山田 太郎_手書き.png")));
     }
 
     [Fact]
