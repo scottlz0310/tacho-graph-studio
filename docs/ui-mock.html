@@ -137,17 +137,21 @@
         /* サムネイルナビゲーション */
         .thumb-nav {
             display: flex;
+            flex-direction: column;
             gap: 8px;
-            margin-bottom: 12px;
             background: #faf9f8;
             padding: 8px;
             border-radius: 4px;
             border: 1px solid var(--border-color);
+            overflow-x: hidden;
+            overflow-y: auto;
+            min-height: 0;
         }
 
         .thumb-item {
             width: 50px;
             height: 50px;
+            flex: 0 0 50px;
             border: 2px solid #a19f9d;
             border-radius: 4px;
             cursor: pointer;
@@ -167,6 +171,7 @@
         /* プレビューエリア */
         .preview-area {
             flex: 1;
+            min-width: 0;
             position: relative;
             background-color: #faf9f8;
             border: 1px solid var(--border-color);
@@ -235,23 +240,39 @@
             z-index: 6;
         }
 
-        /* 中間：画像回転・微調整コントロール（復活） */
-        .rotation-controls {
-            width: 100%;
-            display: flex;
-            align-items: center;
+        .stage-workspace {
+            display: grid;
+            grid-template-columns: 68px minmax(0, 1fr) 132px;
             gap: 12px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* 右レール：画像回転・微調整コントロール */
+        .rotation-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
             background: #faf9f8;
-            padding: 10px 14px;
+            padding: 12px;
             border-radius: 4px;
             border: 1px solid var(--border-color);
-            margin-top: 12px;
             box-sizing: border-box;
+            min-height: 0;
         }
 
         .rotation-controls input[type="range"] {
             flex: 1;
+            min-height: 120px;
+            writing-mode: vertical-lr;
+            direction: rtl;
             cursor: pointer;
+        }
+
+        .rotation-controls input[type="number"] {
+            width: 76px;
+            box-sizing: border-box;
         }
 
         .btn-secondary {
@@ -355,45 +376,51 @@
                 <button class="btn-secondary">設定</button>
             </div>
 
-            <!-- サムネイルナビゲーション -->
-            <div class="thumb-nav">
-                <div class="thumb-item active">No.1</div>
-                <div class="thumb-item">No.2</div>
-                <div class="thumb-item">No.3</div>
-                <div class="thumb-item">No.4</div>
-                <div class="thumb-item">---</div>
-                <div class="thumb-item">---</div>
-            </div>
+            <div class="stage-workspace">
+                <!-- サムネイルナビゲーション（#53: 縦配置・垂直スクロール） -->
+                <div class="thumb-nav">
+                    <div class="thumb-item active">No.1</div>
+                    <div class="thumb-item">No.2</div>
+                    <div class="thumb-item">No.3</div>
+                    <div class="thumb-item">No.4</div>
+                    <div class="thumb-item">No.5</div>
+                    <div class="thumb-item">No.6</div>
+                    <div class="thumb-item">No.7</div>
+                    <div class="thumb-item">No.8</div>
+                </div>
 
-            <!-- プレビュー -->
-            <div class="preview-area">
-                <div class="tacho-canvas">
-                    <!-- 十字ガイドライン（画像と同じパン/ズーム対象、回転とは独立） -->
-                    <div class="guide-h"></div><div class="guide-v"></div>
-                    
-                    <!-- 回転するダミー画像 -->
-                    <div class="tacho-disk-img" id="tacho-disk" style="background: radial-gradient(circle, #fff 40%, #e0e0e0 41%, #fff 45%, #ccc 70%, #fff 71%);">
-                        <!-- 走行波形シミュレーション（画像と一緒に回転） -->
-                        <div style="position: absolute; width: 4px; height: 80px; background: rgba(0,0,0,0.4); top: 15%; left: 49%; transform: rotate(15deg); border-radius: 2px;"></div>
-                        <div style="position: absolute; width: 4px; height: 60px; background: rgba(0,0,0,0.4); top: 30%; left: 52%; transform: rotate(85deg); border-radius: 2px;"></div>
+                <!-- プレビュー -->
+                <div class="preview-area">
+                    <div class="tacho-canvas">
+                        <!-- 十字ガイドライン（画像と同じパン/ズーム対象、回転とは独立） -->
+                        <div class="guide-h"></div><div class="guide-v"></div>
+
+                        <!-- 回転するダミー画像 -->
+                        <div class="tacho-disk-img" id="tacho-disk" style="background: radial-gradient(circle, #fff 40%, #e0e0e0 41%, #fff 45%, #ccc 70%, #fff 71%);">
+                            <!-- 走行波形シミュレーション（画像と一緒に回転） -->
+                            <div style="position: absolute; width: 4px; height: 80px; background: rgba(0,0,0,0.4); top: 15%; left: 49%; transform: rotate(15deg); border-radius: 2px;"></div>
+                            <div style="position: absolute; width: 4px; height: 60px; background: rgba(0,0,0,0.4); top: 30%; left: 52%; transform: rotate(85deg); border-radius: 2px;"></div>
+                        </div>
+
+                        <!-- 自動文字入れレイヤー（画像と独立） -->
+                        <div class="overlay-text" id="overlay-text" style="top:25%; left:50%; transform:translate(-50%, -50%);"></div>
                     </div>
-                    
-                    <!-- 自動文字入れレイヤー（画像と独立） -->
-                    <div class="overlay-text" id="overlay-text" style="top:25%; left:50%; transform:translate(-50%, -50%);"></div>
+                    <div class="zoom-controls">
+                        <button class="zoom-btn">🔍 ＋</button>
+                        <button class="zoom-btn">🔍 ─</button>
+                        <button class="zoom-btn">⤢ 拡大</button>
+                    </div>
                 </div>
-                <div class="zoom-controls">
-                    <button class="zoom-btn">🔍 ＋</button>
-                    <button class="zoom-btn">🔍 ─</button>
-                    <button class="zoom-btn">⤢ 拡大</button>
-                </div>
-            </div>
 
-            <!-- 中間：画像回転・微調整コントロール（見事に復活） -->
-            <div class="rotation-controls">
-                <label for="rotate-slider" style="font-size: 13px;">🔄 角度微調整 (0時基準):</label>
-                <input type="range" id="rotate-slider" min="-180" max="180" value="0" oninput="rotateImage(this.value)">
-                <span id="angle-display" style="font-size: 13px; font-family: monospace; width: 45px; font-weight: bold; text-align: right;">0°</span>
-                <button class="btn-secondary" onclick="resetRotation()">リセット</button>
+                <!-- 右：回転補正レール -->
+                <div class="rotation-controls">
+                    <label for="rotate-slider">🔄 回転補正</label>
+                    <input type="range" id="rotate-slider" min="-180" max="180" step="0.5" value="0" oninput="rotateImage(this.value)">
+                    <label for="rotate-number">角度 (°)</label>
+                    <input type="number" id="rotate-number" min="-180" max="180" step="0.5" value="0" oninput="rotateImage(this.value)">
+                    <span id="angle-display" style="font-size: 13px; font-family: monospace; font-weight: bold;">0°</span>
+                    <button class="btn-secondary" onclick="resetRotation()">リセット</button>
+                </div>
             </div>
 
             <!-- 下部：手編集可能なメタデータエディタ -->
@@ -431,6 +458,8 @@
     <script>
         function rotateImage(val) {
             document.getElementById('tacho-disk').style.transform = `rotate(${val}deg)`;
+            document.getElementById('rotate-slider').value = val;
+            document.getElementById('rotate-number').value = val;
             document.getElementById('angle-display').innerText = `${val}°`;
         }
 

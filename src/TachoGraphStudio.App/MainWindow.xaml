@@ -225,7 +225,7 @@
             <!-- ステージ（FR-04, FR-06〜08: サムネイルナビ＋プレビュー＋回転補正） -->
             <Grid
                 Grid.Column="2"
-                RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto"
+                RowDefinitions="Auto,Auto,*,Auto,Auto"
                 RowSpacing="12">
                 <StackPanel
                     Grid.Row="0"
@@ -268,102 +268,127 @@
                     Message="{x:Bind StageViewModel.ImportError, Mode=OneWay}"
                     Severity="Error"
                     Title="シート取込に失敗しました" />
-                <ListView
-                    Grid.Row="2"
-                    ItemsSource="{x:Bind StageViewModel.Discs}"
-                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                    ScrollViewer.HorizontalScrollMode="Enabled"
-                    ScrollViewer.VerticalScrollMode="Disabled"
-                    SelectedItem="{x:Bind StageViewModel.SelectedDisc, Mode=TwoWay}"
-                    SelectionMode="Single">
-                    <ListView.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <ItemsStackPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ListView.ItemsPanel>
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="stage:DiscWorkItem">
-                            <StackPanel
-                                Width="96"
-                                Padding="4,8"
-                                Spacing="4">
-                                <TextBlock
-                                    HorizontalAlignment="Center"
-                                    FontWeight="SemiBold"
-                                    Text="{x:Bind Label}" />
-                                <Border
-                                    Width="72"
-                                    Height="72"
-                                    HorizontalAlignment="Center"
-                                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                                    CornerRadius="4">
-                                    <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" />
-                                </Border>
-                                <TextBlock
-                                    HorizontalAlignment="Center"
-                                    FontSize="11"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="{x:Bind StatusLabel, Mode=OneWay}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-                <Border
-                    Grid.Row="3"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="4">
-                    <Grid>
-                        <stage:DiscPreviewControl
-                            Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=OneWay, FallbackValue=0}"
-                            FullscreenRequested="OnPreviewFullscreenRequested"
-                            Metadata="{x:Bind StageViewModel.SelectedDisc.Metadata, Mode=OneWay, FallbackValue={x:Null}}"
-                            Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}"
-                            TextTemplate="{x:Bind StageViewModel.SelectedTemplate.Template, Mode=OneWay, FallbackValue={x:Null}}" />
-                        <TextBlock
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="シートを取り込むと円盤のプレビューが表示されます"
-                            Visibility="{x:Bind StageViewModel.IsEmptyStateVisible, Mode=OneWay}" />
-                    </Grid>
-                </Border>
-                <!-- 回転補正（FR-07: スライダー・数値入力・リセット） -->
+                <!-- 左: 縦サムネイル / 中央: プレビュー / 右: 回転補正レール (#53) -->
                 <Grid
-                    Grid.Row="4"
-                    ColumnDefinitions="Auto,*,Auto,Auto"
+                    Grid.Row="2"
+                    ColumnDefinitions="Auto,*,Auto"
                     ColumnSpacing="12">
-                    <TextBlock
+                    <Border
                         Grid.Column="0"
-                        VerticalAlignment="Center"
-                        Text="回転補正:" />
-                    <Slider
+                        Width="112"
+                        Padding="4"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <ListView
+                            AutomationProperties.Name="円盤サムネイル"
+                            ItemsSource="{x:Bind StageViewModel.Discs}"
+                            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                            ScrollViewer.HorizontalScrollMode="Disabled"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto"
+                            ScrollViewer.VerticalScrollMode="Enabled"
+                            SelectedItem="{x:Bind StageViewModel.SelectedDisc, Mode=TwoWay}"
+                            SelectionMode="Single">
+                            <ListView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Vertical" />
+                                </ItemsPanelTemplate>
+                            </ListView.ItemsPanel>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="stage:DiscWorkItem">
+                                    <StackPanel
+                                        Width="88"
+                                        Padding="4,8"
+                                        Spacing="4">
+                                        <TextBlock
+                                            HorizontalAlignment="Center"
+                                            FontWeight="SemiBold"
+                                            Text="{x:Bind Label}" />
+                                        <Border
+                                            Width="72"
+                                            Height="72"
+                                            HorizontalAlignment="Center"
+                                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                            CornerRadius="4">
+                                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" />
+                                        </Border>
+                                        <TextBlock
+                                            HorizontalAlignment="Center"
+                                            FontSize="11"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{x:Bind StatusLabel, Mode=OneWay}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Border>
+                    <Border
                         Grid.Column="1"
-                        VerticalAlignment="Center"
-                        IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
-                        Maximum="180"
-                        Minimum="-180"
-                        StepFrequency="0.5"
-                        Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
-                    <NumberBox
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <Grid>
+                            <stage:DiscPreviewControl
+                                Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=OneWay, FallbackValue=0}"
+                                FullscreenRequested="OnPreviewFullscreenRequested"
+                                Metadata="{x:Bind StageViewModel.SelectedDisc.Metadata, Mode=OneWay, FallbackValue={x:Null}}"
+                                Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}"
+                                TextTemplate="{x:Bind StageViewModel.SelectedTemplate.Template, Mode=OneWay, FallbackValue={x:Null}}" />
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="シートを取り込むと円盤のプレビューが表示されます"
+                                Visibility="{x:Bind StageViewModel.IsEmptyStateVisible, Mode=OneWay}" />
+                        </Grid>
+                    </Border>
+                    <!-- 回転補正（FR-07: 縦スライダー・数値入力・リセット） -->
+                    <Border
                         Grid.Column="2"
-                        MinWidth="110"
-                        IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
-                        Maximum="180"
-                        Minimum="-180"
-                        SmallChange="0.5"
-                        SpinButtonPlacementMode="Compact"
-                        Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
-                    <Button
-                        Grid.Column="3"
-                        Click="OnResetRotationClick"
-                        Content="リセット"
-                        IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}" />
+                        MinWidth="136"
+                        Padding="12"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="8">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Text="回転補正" />
+                            <Slider
+                                Grid.Row="1"
+                                HorizontalAlignment="Center"
+                                AutomationProperties.Name="回転角度"
+                                IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
+                                Maximum="180"
+                                Minimum="-180"
+                                Orientation="Vertical"
+                                StepFrequency="0.5"
+                                Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
+                            <NumberBox
+                                Grid.Row="2"
+                                Header="角度 (°)"
+                                IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
+                                Maximum="180"
+                                Minimum="-180"
+                                SmallChange="0.5"
+                                SpinButtonPlacementMode="Compact"
+                                Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
+                            <Button
+                                Grid.Row="3"
+                                HorizontalAlignment="Stretch"
+                                Click="OnResetRotationClick"
+                                Content="リセット"
+                                IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}" />
+                        </Grid>
+                    </Border>
                 </Grid>
                 <!-- メタデータエディタ(FR-13, FR-15, FR-17): 円盤ごとに確定前の手修正ができる -->
                 <Grid
-                    Grid.Row="5"
+                    Grid.Row="3"
                     ColumnDefinitions="*,*,*,Auto"
                     ColumnSpacing="12">
                     <TextBox
@@ -389,7 +414,7 @@
                         IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}" />
                 </Grid>
                 <!-- 保存アクションバー(FR-19〜21): ファイル名プレビュー・確定保存して次へ -->
-                <StackPanel Grid.Row="6" Spacing="8">
+                <StackPanel Grid.Row="4" Spacing="8">
                     <InfoBar
                         IsClosable="True"
                         IsOpen="{x:Bind StageViewModel.HasSaveError, Mode=OneWay}"
