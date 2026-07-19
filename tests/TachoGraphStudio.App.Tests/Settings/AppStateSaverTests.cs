@@ -46,6 +46,28 @@ public sealed class AppStateSaverTests
     }
 
     [Fact]
+    public async Task TrySaveAsync_FailureAndRecoveryRaiseChangeNotifications()
+    {
+        FakeAppStateStore store = new() { WriteException = new IOException("書き込み失敗") };
+        AppStateSaver saver = new(store);
+        List<string?> changedProperties = [];
+        saver.PropertyChanged += (_, e) => changedProperties.Add(e.PropertyName);
+
+        // InfoBar バインド(HasError / LastError)が失敗と回復の両方で更新される
+        await saver.TrySaveAsync(new AppState());
+        Assert.True(saver.HasError);
+        Assert.Contains(nameof(AppStateSaver.LastError), changedProperties);
+        Assert.Contains(nameof(AppStateSaver.HasError), changedProperties);
+
+        changedProperties.Clear();
+        store.WriteException = null;
+        await saver.TrySaveAsync(new AppState());
+
+        Assert.False(saver.HasError);
+        Assert.Contains(nameof(AppStateSaver.HasError), changedProperties);
+    }
+
+    [Fact]
     public void TryFlush_WriteFailureReturnsFalseWithoutThrowing()
     {
         FakeAppStateStore store = new() { WriteException = new IOException("ディスクエラー") };

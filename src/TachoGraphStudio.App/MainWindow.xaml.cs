@@ -24,7 +24,6 @@ namespace TachoGraphStudio.App;
 
 public sealed partial class MainWindow : Window
 {
-    private readonly AppStateSaver _appStateSaver;
     private readonly IAppStateStore _appStateStore;
     private readonly SupabaseCredentialsValidator _credentialsValidator;
     private readonly HttpClient _httpClient = new();
@@ -44,7 +43,7 @@ public sealed partial class MainWindow : Window
 
         _appStateStore = new JsonAppStateStore(
             Path.Combine(localFolderPath, "settings", "app-state.json"));
-        _appStateSaver = new AppStateSaver(_appStateStore);
+        AppStateSaver = new AppStateSaver(_appStateStore);
 
         _secretStore = new DpapiSecretStore(
             Path.Combine(localCacheFolderPath, "secrets", "supabase.secret.json"));
@@ -78,7 +77,13 @@ public sealed partial class MainWindow : Window
                 await StageViewModel.LoadTemplatesAsync();
             }
         };
+
+        // 起動処理(OnRootGridLoaded)の await 中に最大化されても配置を保存できるよう、
+        // ウィンドウ表示前(必ず通常表示)の bounds でトラッカーを初期化する
+        _windowPlacementTracker.Initialize(IsPresenterRestored(), CurrentWindowBounds());
     }
+
+    public AppStateSaver AppStateSaver { get; }
 
     public RosterViewModel RosterViewModel { get; }
 
@@ -257,12 +262,6 @@ public sealed partial class MainWindow : Window
 
         _isAppStateTrackingEnabled = true;
 
-        // 移動・リサイズせずに最大化して閉じても配置を保存できるよう、
-        // 追跡開始時点の通常表示 bounds で初期化する
-        _windowPlacementTracker.Initialize(
-            IsPresenterRestored(),
-            CurrentWindowBounds());
-
         _saveAppStateTimer = DispatcherQueue.CreateTimer();
         _saveAppStateTimer.Interval = TimeSpan.FromMilliseconds(500);
         _saveAppStateTimer.IsRepeating = false;
@@ -315,10 +314,10 @@ public sealed partial class MainWindow : Window
 
         // 終了時の最終保存。fault は AppStateSaver 内で捕捉され、タイムアウトも false として
         // 明示的に扱われる(UI スレッドへ throw しない)。失敗理由はトレースログへ伝播する
-        _appStateSaver.TryFlush(CaptureAppState(), TimeSpan.FromSeconds(2));
+        AppStateSaver.TryFlush(CaptureAppState(), TimeSpan.FromSeconds(2));
     }
 
-    private Task SaveAppStateAsync() => _appStateSaver.TrySaveAsync(CaptureAppState());
+    private Task SaveAppStateAsync() => AppStateSaver.TrySaveAsync(CaptureAppState());
 
     private AppState CaptureAppState()
     {

@@ -1,12 +1,15 @@
 using System.Diagnostics;
 
+using CommunityToolkit.Mvvm.ComponentModel;
+
 using TachoGraphStudio.Core.Settings;
 
 namespace TachoGraphStudio.App.Settings;
 
-// アプリ状態(FR-22)の保存を例外安全に行う。失敗は LastError とトレースログへ伝播し、
-// アプリの動作は止めない(次回の変更・終了時 flush で再試行される)
-public sealed class AppStateSaver
+// アプリ状態(FR-22)の保存を例外安全に行う。失敗は LastError(InfoBar バインド用に
+// 変更通知付き)とトレースログへ伝播し、アプリの動作は止めない
+// (次回の変更・終了時 flush で再試行される)
+public sealed partial class AppStateSaver : ObservableObject
 {
     private readonly IAppStateStore _store;
 
@@ -18,7 +21,11 @@ public sealed class AppStateSaver
     }
 
     // 直近の保存失敗理由。成功すると null に戻る
-    public string? LastError { get; private set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
+    public partial string? LastError { get; private set; }
+
+    public bool HasError => LastError is not null;
 
     public async Task<bool> TrySaveAsync(AppState state, CancellationToken cancellationToken = default)
     {

@@ -30,6 +30,19 @@ public sealed class WindowPlacementTrackerTests
     }
 
     [Fact]
+    public void MaximizeBeforeTrackingStarts_StillCapturesInitialBounds()
+    {
+        WindowPlacementTracker tracker = new();
+        // ウィンドウ生成直後(表示前・必ず通常表示)に初期化される。
+        // 起動処理の await 中に最大化されても(bounds 変更は未追跡)、初期 bounds が残る
+        tracker.Initialize(isRestored: true, new RectInt32(100, 50, 1440, 900));
+
+        Assert.Equal(
+            new WindowPlacement(100, 50, 1440, 900, IsMaximized: true),
+            tracker.Capture(isMaximized: true));
+    }
+
+    [Fact]
     public void Initialize_WhenNotRestoredKeepsNull()
     {
         WindowPlacementTracker tracker = new();
