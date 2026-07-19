@@ -172,6 +172,11 @@ public sealed partial class StageViewModel : ObservableObject
         TemplateWarning = null;
         Templates.Clear();
         SelectedTemplate = null;
+        // ComboBox の候補一覧(TemplateSelectionItems)を先に空(編集エントリのみ)へ確定させる。
+        // SelectedTemplate への代入は ItemsSource に存在しない値の選択を試みることになり、
+        // Items 未構築時の SelectedItem 設定は WinUI 側で例外・表示不整合の原因になるため、
+        // 常に「候補一覧の確定 → SelectedTemplate の代入」の順を守る(#43 レビュー指摘)
+        RebuildTemplateSelectionItems();
 
         try
         {
@@ -188,6 +193,9 @@ public sealed partial class StageViewModel : ObservableObject
                     + string.Join(" / ", result.Failures.Select(
                         failure => $"{failure.FileName}({failure.Message})"));
             }
+
+            // SelectedTemplate へ触れる前に候補一覧を新しい Templates で再確定させる
+            RebuildTemplateSelectionItems();
 
             if (targetDisc is not null)
             {
@@ -215,12 +223,9 @@ public sealed partial class StageViewModel : ObservableObject
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // 失敗時は円盤のメタデータに触れない。previousSelectedId は円盤の保存値から
-            // 取得しているため、次回の再試行でも元の選択を正しく復元できる
+            // 取得しているため、次回の再試行でも元の選択を正しく復元できる。候補一覧は
+            // 冒頭で既に空へ確定済みのため、ここで再度 RebuildTemplateSelectionItems は不要
             TemplateWarning = $"テンプレートの読み込みに失敗しました: {exception.Message}";
-        }
-        finally
-        {
-            RebuildTemplateSelectionItems();
         }
     }
 

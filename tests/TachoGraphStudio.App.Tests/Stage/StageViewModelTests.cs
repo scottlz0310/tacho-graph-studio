@@ -346,6 +346,33 @@ public sealed class StageViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadTemplatesAsync_RebuildsSelectionItemsBeforeChangingSelectedTemplate()
+    {
+        // SelectedTemplate への代入(ComboBox.SelectedItem への反映を誘発する)時点で、
+        // TemplateSelectionItems(ComboBox の候補一覧)が既に新しい内容へ更新済みであることを
+        // 確認する。Items 構築前の SelectedItem 設定は WinUI 側で例外・表示不整合の原因になる
+        // ため、この順序を守る必要がある(#43 レビュー指摘)
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        List<int> selectionItemsCountWhenSelectedTemplateChanged = [];
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(StageViewModel.SelectedTemplate) && viewModel.SelectedTemplate is not null)
+            {
+                selectionItemsCountWhenSelectedTemplateChanged.Add(viewModel.TemplateSelectionItems.Count);
+            }
+        };
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.NotEmpty(selectionItemsCountWhenSelectedTemplateChanged);
+        // 実テンプレート(Yazaki45) + 末尾の編集エントリの 2 件が既に構築済みであること
+        Assert.All(selectionItemsCountWhenSelectedTemplateChanged, count => Assert.Equal(2, count));
+    }
+
+    [Fact]
     public async Task LoadTemplatesAsync_RebuildsSelectionItemsWithTrailingEditEntry()
     {
         FakeTemplateStore store = new();
