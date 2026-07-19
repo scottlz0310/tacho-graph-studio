@@ -8,6 +8,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
+using TachoGraphStudio.App.Stage;
+
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.System;
@@ -21,7 +23,7 @@ using VerticalTextAlignment = TachoGraphStudio.Core.Templates.VerticalTextAlignm
 namespace TachoGraphStudio.App.Templates;
 
 // テンプレート編集の全画面オーバーレイ(FR-24)。
-// プレビューはフィールド名ラベルを比率座標に描画し、ドラッグで位置を調整できる
+// プレビューは選択円盤の実データを比率座標に描画し、ドラッグで位置を調整できる
 public sealed partial class TemplateEditorOverlay : UserControl
 {
     public static readonly DependencyProperty PreviewBackgroundProperty = DependencyProperty.Register(
@@ -29,6 +31,18 @@ public sealed partial class TemplateEditorOverlay : UserControl
         typeof(ImageSource),
         typeof(TemplateEditorOverlay),
         new PropertyMetadata(null));
+
+    public static readonly DependencyProperty PreviewAngleProperty = DependencyProperty.Register(
+        nameof(PreviewAngle),
+        typeof(double),
+        typeof(TemplateEditorOverlay),
+        new PropertyMetadata(0.0));
+
+    public static readonly DependencyProperty PreviewMetadataProperty = DependencyProperty.Register(
+        nameof(PreviewMetadata),
+        typeof(DiscMetadata),
+        typeof(TemplateEditorOverlay),
+        new PropertyMetadata(null, OnPreviewMetadataChanged));
 
     private readonly Dictionary<TemplateFieldViewModel, Border> _markers = [];
     private TemplateEditorViewModel? _viewModel;
@@ -44,6 +58,20 @@ public sealed partial class TemplateEditorOverlay : UserControl
     {
         get => (ImageSource?)GetValue(PreviewBackgroundProperty);
         set => SetValue(PreviewBackgroundProperty, value);
+    }
+
+    // ステージで選択中の円盤に適用されている回転補正角
+    public double PreviewAngle
+    {
+        get => (double)GetValue(PreviewAngleProperty);
+        set => SetValue(PreviewAngleProperty, value);
+    }
+
+    // フィールドラベルへ反映する選択中円盤の文字入れメタデータ
+    public DiscMetadata? PreviewMetadata
+    {
+        get => (DiscMetadata?)GetValue(PreviewMetadataProperty);
+        set => SetValue(PreviewMetadataProperty, value);
     }
 
     // FileOpenPicker の初期化に使うホストウィンドウ。表示前に MainWindow が設定する
@@ -213,6 +241,28 @@ public sealed partial class TemplateEditorOverlay : UserControl
         }
     }
 
+    private static void OnPreviewMetadataChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        TemplateEditorOverlay overlay = (TemplateEditorOverlay)d;
+
+        if (e.OldValue is DiscMetadata oldMetadata)
+        {
+            oldMetadata.PropertyChanged -= overlay.OnPreviewMetadataPropertyChanged;
+        }
+
+        if (e.NewValue is DiscMetadata newMetadata)
+        {
+            newMetadata.PropertyChanged += overlay.OnPreviewMetadataPropertyChanged;
+        }
+
+        overlay.LayoutAllMarkers();
+    }
+
+    private void OnPreviewMetadataPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        LayoutAllMarkers();
+    }
+
     // ---- プレビューキャンバス ----
 
     private void AttachTemplate(TemplateItemViewModel? template)
@@ -344,7 +394,7 @@ public sealed partial class TemplateEditorOverlay : UserControl
         double shortSide = Math.Min(PreviewSurface.Width, PreviewSurface.Height);
         TextBlock label = (TextBlock)marker.Child;
 
-        label.Text = field.Name;
+        label.Text = TemplatePreviewLabel.Resolve(field.Name, PreviewMetadata);
         label.FontSize = double.IsFinite(shortSide) && shortSide > 0
             ? Math.Max(8.0, field.SizeRatio * shortSide)
             : 12.0;

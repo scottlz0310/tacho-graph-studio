@@ -150,7 +150,14 @@
                                 Fill="White"
                                 Opacity="0.9"
                                 Stroke="{ThemeResource CardStrokeColorDefaultBrush}" />
-                            <Image Source="{x:Bind PreviewBackground, Mode=OneWay}" Stretch="Uniform" />
+                            <Image
+                                RenderTransformOrigin="0.5,0.5"
+                                Source="{x:Bind PreviewBackground, Mode=OneWay}"
+                                Stretch="Uniform">
+                                <Image.RenderTransform>
+                                    <RotateTransform Angle="{x:Bind PreviewAngle, Mode=OneWay}" />
+                                </Image.RenderTransform>
+                            </Image>
                             <Canvas x:Name="FieldCanvas" />
                         </Grid>
                     </Border>

@@ -442,6 +442,9 @@
             x:Name="TemplateEditor"
             Grid.Row="0"
             Grid.RowSpan="3"
+            PreviewAngle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=OneWay, FallbackValue=0}"
+            PreviewBackground="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}"
+            PreviewMetadata="{x:Bind StageViewModel.SelectedDisc.Metadata, Mode=OneWay, FallbackValue={x:Null}}"
             Visibility="{x:Bind TemplateEditorViewModel.IsOpen, Mode=OneWay}" />
     </Grid>
 </Window>
