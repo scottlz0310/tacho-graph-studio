@@ -1,8 +1,10 @@
 using System.ComponentModel;
 
+using Microsoft.UI.Input;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
@@ -46,6 +48,12 @@ public sealed partial class DiscPreviewControl : UserControl
         new PropertyMetadata(true));
 
     private const double ZoomStep = 1.25;
+    private const double RotationHitPadding = 12.0;
+    private const double RotationHitBandWidth = 32.0;
+
+    private RotationDragCalculator? _rotationDragCalculator;
+    private uint? _rotationPointerId;
+    private InputSystemCursorShape? _cursorShape;
 
     public DiscPreviewControl()
     {
@@ -122,7 +130,15 @@ public sealed partial class DiscPreviewControl : UserControl
     // 画像の回転とは独立、ズーム・スクロールには追従する
     private void RenderTextOverlay()
     {
+        if (_rotationPointerId is not null)
+        {
+            RotationInteractionLayer.ReleasePointerCaptures();
+            EndRotationDrag(isHovering: false);
+        }
+
         TextOverlayCanvas.Children.Clear();
+        RotationInteractionLayer.Width = 0;
+        RotationInteractionLayer.Height = 0;
 
         if (Source is not BitmapSource { PixelWidth: > 0, PixelHeight: > 0 } bitmap
             || DiscImage.ActualWidth < 1
@@ -138,6 +154,7 @@ public sealed partial class DiscPreviewControl : UserControl
         double imageHeight = bitmap.PixelHeight * scale;
         TextOverlayCanvas.Width = imageWidth;
         TextOverlayCanvas.Height = imageHeight;
+        UpdateRotationInteractionBounds(imageWidth, imageHeight);
 
         // 手書きスキップ時は文字入れを行わない(FR-17)
         if (TextTemplate is not { } template
@@ -197,6 +214,143 @@ public sealed partial class DiscPreviewControl : UserControl
     {
         ContentHost.Width = e.NewSize.Width;
         ContentHost.Height = e.NewSize.Height;
+    }
+
+    private void UpdateRotationInteractionBounds(double imageWidth, double imageHeight)
+    {
+        RotationInteractionLayer.Width = imageWidth + RotationHitPadding * 2;
+        RotationInteractionLayer.Height = imageHeight + RotationHitPadding * 2;
+
+        double diameter = Math.Min(imageWidth, imageHeight);
+        RotationHitIndicator.Width = diameter;
+        RotationHitIndicator.Height = diameter;
+    }
+
+    private void OnRotationPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.Pointer.PointerDeviceType != PointerDeviceType.Mouse)
+        {
+            return;
+        }
+
+        PointerPoint point = e.GetCurrentPoint(RotationInteractionLayer);
+        if (!point.Properties.IsLeftButtonPressed || !IsInRotationHitBand(point.Position))
+        {
+            return;
+        }
+
+        if (!RotationInteractionLayer.CapturePointer(e.Pointer))
+        {
+            return;
+        }
+
+        _rotationPointerId = e.Pointer.PointerId;
+        _rotationDragCalculator = new RotationDragCalculator(
+            Angle,
+            point.Position.X,
+            point.Position.Y,
+            RotationInteractionLayer.ActualWidth / 2,
+            RotationInteractionLayer.ActualHeight / 2);
+        UpdateRotationInteractionFeedback(isHovering: true, isDragging: true);
+        e.Handled = true;
+    }
+
+    private void OnRotationPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.Pointer.PointerDeviceType != PointerDeviceType.Mouse)
+        {
+            return;
+        }
+
+        PointerPoint point = e.GetCurrentPoint(RotationInteractionLayer);
+        if (_rotationPointerId == e.Pointer.PointerId && _rotationDragCalculator is not null)
+        {
+            Angle = _rotationDragCalculator.Calculate(point.Position.X, point.Position.Y);
+            UpdateRotationInteractionFeedback(isHovering: true, isDragging: true);
+            e.Handled = true;
+            return;
+        }
+
+        UpdateRotationInteractionFeedback(IsInRotationHitBand(point.Position), isDragging: false);
+    }
+
+    private void OnRotationPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (_rotationPointerId != e.Pointer.PointerId)
+        {
+            return;
+        }
+
+        PointerPoint point = e.GetCurrentPoint(RotationInteractionLayer);
+        EndRotationDrag(IsInRotationHitBand(point.Position));
+        RotationInteractionLayer.ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void OnRotationPointerCanceled(object sender, PointerRoutedEventArgs e)
+    {
+        if (_rotationPointerId != e.Pointer.PointerId)
+        {
+            return;
+        }
+
+        EndRotationDrag(isHovering: false);
+        RotationInteractionLayer.ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void OnRotationPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        if (_rotationPointerId == e.Pointer.PointerId)
+        {
+            EndRotationDrag(isHovering: false);
+        }
+    }
+
+    private void OnRotationPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (_rotationPointerId is null)
+        {
+            UpdateRotationInteractionFeedback(isHovering: false, isDragging: false);
+        }
+    }
+
+    private bool IsInRotationHitBand(Windows.Foundation.Point position)
+    {
+        double radius = Math.Min(RotationHitIndicator.Width, RotationHitIndicator.Height) / 2;
+        if (radius <= 0)
+        {
+            return false;
+        }
+
+        double deltaX = position.X - RotationInteractionLayer.ActualWidth / 2;
+        double deltaY = position.Y - RotationInteractionLayer.ActualHeight / 2;
+        double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+        return distance >= Math.Max(0, radius - RotationHitBandWidth)
+            && distance <= radius + RotationHitPadding;
+    }
+
+    private void EndRotationDrag(bool isHovering)
+    {
+        _rotationPointerId = null;
+        _rotationDragCalculator = null;
+        UpdateRotationInteractionFeedback(isHovering, isDragging: false);
+    }
+
+    private void UpdateRotationInteractionFeedback(bool isHovering, bool isDragging)
+    {
+        InputSystemCursorShape? cursorShape = isDragging
+            ? InputSystemCursorShape.SizeAll
+            : isHovering
+                ? InputSystemCursorShape.Hand
+                : null;
+        if (_cursorShape != cursorShape)
+        {
+            ProtectedCursor = cursorShape is { } shape ? InputSystemCursor.Create(shape) : null;
+            _cursorShape = cursorShape;
+        }
+
+        RotationHitIndicator.Opacity = isDragging ? 0.55 : isHovering ? 0.3 : 0;
     }
 
     private void OnZoomInClick(object sender, RoutedEventArgs e)

@@ -45,6 +45,27 @@
                     Fill="{ThemeResource AccentFillColorDefaultBrush}"
                     IsHitTestVisible="False"
                     Opacity="0.5" />
+                <!-- マウスだけを対象とする外周ドラッグ領域。touch/pen は未処理のまま Scroller へ渡す -->
+                <Grid
+                    x:Name="RotationInteractionLayer"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    PointerCanceled="OnRotationPointerCanceled"
+                    PointerCaptureLost="OnRotationPointerCaptureLost"
+                    PointerExited="OnRotationPointerExited"
+                    PointerMoved="OnRotationPointerMoved"
+                    PointerPressed="OnRotationPointerPressed"
+                    PointerReleased="OnRotationPointerReleased">
+                    <Ellipse
+                        x:Name="RotationHitIndicator"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False"
+                        Opacity="0"
+                        Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                        StrokeThickness="3" />
+                </Grid>
             </Grid>
         </ScrollViewer>
         <StackPanel
