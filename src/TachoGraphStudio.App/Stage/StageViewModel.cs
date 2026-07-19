@@ -39,6 +39,10 @@ public sealed partial class StageViewModel : ObservableObject
     [ObservableProperty]
     public partial DateOnly TargetDate { get; set; }
 
+    // 手書きスキップ(FR-17)。トップバーで一括指定し全円盤に適用する(アーキテクチャ §4)
+    [ObservableProperty]
+    public partial bool SkipHandwritten { get; set; }
+
     // チャート紙様式の選択(FR-16)。文字入れ位置はテンプレート定義に従う
     [ObservableProperty]
     public partial StoredTemplate? SelectedTemplate { get; set; }
@@ -141,6 +145,14 @@ public sealed partial class StageViewModel : ObservableObject
         }
     }
 
+    partial void OnSkipHandwrittenChanged(bool value)
+    {
+        foreach (DiscWorkItem disc in Discs)
+        {
+            disc.Metadata.SkipHandwritten = value;
+        }
+    }
+
     public async Task ImportAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(paths);
@@ -168,6 +180,7 @@ public sealed partial class StageViewModel : ObservableObject
                     Preview = _imageSourceFactory.Create(disc.PremultipliedBgra, disc.Width, disc.Height),
                 };
                 item.Metadata.PrintDate = TargetDate.ToString(PrintDateFormat);
+                item.Metadata.SkipHandwritten = SkipHandwritten;
                 Discs.Add(item);
                 SelectedDisc ??= item;
             }

@@ -114,11 +114,30 @@ public sealed partial class MainWindow : Window
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
+        TargetDatePicker.Date = new DateTimeOffset(
+            StageViewModel.TargetDate.ToDateTime(TimeOnly.MinValue));
+
         await RosterViewModel.LoadFilterSettingsAsync();
         ApplyFilterSettingsToControls();
 
         await StageViewModel.LoadTemplatesAsync();
         await RefreshSupabaseConnectionAsync(promptIfUnset: true);
+    }
+
+    // 処理対象日の一括指定(FR-14)。クリア(null)時は表示を直前の日付へ戻し、
+    // 表示値と TargetDate が乖離しないようにする(戻す代入で再度 DateChanged が発火するが、
+    // 同値のため TargetDate の変更通知は起きない)
+    private void OnTargetDatePickerDateChanged(
+        CalendarDatePicker sender,
+        CalendarDatePickerDateChangedEventArgs args)
+    {
+        if (args.NewDate is { } date)
+        {
+            StageViewModel.TargetDate = DateOnly.FromDateTime(date.LocalDateTime);
+            return;
+        }
+
+        sender.Date = new DateTimeOffset(StageViewModel.TargetDate.ToDateTime(TimeOnly.MinValue));
     }
 
     private async void OnOpenSettingsButtonClick(object sender, RoutedEventArgs e)

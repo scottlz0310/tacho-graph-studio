@@ -1,6 +1,5 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Text.RegularExpressions;
 
 using Microsoft.UI;
 using Microsoft.UI.Text;
@@ -356,7 +355,7 @@ public sealed partial class TemplateEditorOverlay : UserControl
             label.FontFamily = new FontFamily(field.FontFamily);
         }
 
-        if (TryParseHexColor(field.Color) is { } color)
+        if (HexColor.TryParse(field.Color) is { } color)
         {
             label.Foreground = new SolidColorBrush(color);
         }
@@ -451,20 +450,4 @@ public sealed partial class TemplateEditorOverlay : UserControl
         }
     }
 
-    private static Color? TryParseHexColor(string value)
-    {
-        if (value is null || !HexColorRegex().IsMatch(value))
-        {
-            return null;
-        }
-
-        return Color.FromArgb(
-            0xFF,
-            Convert.ToByte(value.Substring(1, 2), 16),
-            Convert.ToByte(value.Substring(3, 2), 16),
-            Convert.ToByte(value.Substring(5, 2), 16));
-    }
-
-    [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
-    private static partial Regex HexColorRegex();
 }

@@ -176,6 +176,36 @@ public sealed class StageViewModelTests
     }
 
     [Fact]
+    public async Task SkipHandwrittenChange_SyncsToAllDiscsAcrossSelection()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        // 選択切替をまたいでも、一括指定は未選択の円盤へも反映される(FR-17、アーキテクチャ §4)
+        viewModel.SelectedDisc = viewModel.Discs[1];
+
+        viewModel.SkipHandwritten = true;
+
+        Assert.All(viewModel.Discs, disc => Assert.True(disc.Metadata.SkipHandwritten));
+
+        viewModel.SkipHandwritten = false;
+
+        Assert.All(viewModel.Discs, disc => Assert.False(disc.Metadata.SkipHandwritten));
+    }
+
+    [Fact]
+    public async Task ImportAsync_InitializesSkipHandwrittenFromBulkSetting()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        viewModel.SkipHandwritten = true;
+
+        await viewModel.ImportAsync(["sheet.pdf"]);
+
+        Assert.True(viewModel.Discs[0].Metadata.SkipHandwritten);
+    }
+
+    [Fact]
     public async Task ApplyRosterEntry_UpdatesSelectedDiscOnly()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
