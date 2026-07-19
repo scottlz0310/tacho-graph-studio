@@ -346,6 +346,94 @@ public sealed class StageViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadTemplatesAsync_RebuildsSelectionItemsWithTrailingEditEntry()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.Equal(
+            ["Task-Meter", "Yazaki45", "EditEntry"],
+            viewModel.TemplateSelectionItems.Select(
+                item => item is StoredTemplate stored ? stored.Template.Name : "EditEntry"));
+        Assert.Same(TemplateEditEntry.Instance, viewModel.TemplateSelectionItems[^1]);
+    }
+
+    [Fact]
+    public async Task LoadTemplatesAsync_EmptyStoreStillExposesEditEntry()
+    {
+        StageViewModel viewModel = new(
+            new FakeStagePipeline(), new NullImageSourceFactory(), new FakeTemplateStore(), new DateOnly(2026, 7, 19));
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.Same(TemplateEditEntry.Instance, Assert.Single(viewModel.TemplateSelectionItems));
+    }
+
+    [Fact]
+    public async Task SelectedDiscChange_SyncsSelectedTemplateFromDiscMetadata()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
+        StageViewModel viewModel = new(
+            pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        // 円盤ごとに異なる様式を選択する(#43)
+        viewModel.SelectedTemplate = viewModel.Templates[1];
+        viewModel.SelectedDisc = viewModel.Discs[1];
+        viewModel.SelectedTemplate = viewModel.Templates[0];
+
+        viewModel.SelectedDisc = viewModel.Discs[0];
+        Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
+
+        viewModel.SelectedDisc = viewModel.Discs[1];
+        Assert.Equal("Task-Meter", viewModel.SelectedTemplate?.Id);
+    }
+
+    [Fact]
+    public async Task SelectedDiscChange_UnresolvableSavedIdResultsInNullSelection()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = new(
+            pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.Discs[0].Metadata.SelectedTemplateId = "deleted-template";
+
+        viewModel.SelectedDisc = null;
+        viewModel.SelectedDisc = viewModel.Discs[0];
+
+        Assert.Null(viewModel.SelectedTemplate);
+    }
+
+    [Fact]
+    public async Task ImportAsync_NewDiscsInheritCurrentlySelectedTemplate()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = new(
+            pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        viewModel.SelectedTemplate = viewModel.Templates[1];
+
+        await viewModel.ImportAsync(["sheet.pdf"]);
+
+        Assert.Equal("Yazaki45", viewModel.Discs[0].Metadata.SelectedTemplateId);
+        Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
+    }
+
+    [Fact]
     public async Task SaveAndAdvanceAsync_WritesPngMarksDoneAndAdvances()
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
@@ -410,12 +498,13 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1), BuildDisc(2)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
         await viewModel.ImportAsync(["sheet.pdf"]);
-        viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[1].Status = DiscStatus.Done;
         viewModel.Discs[2].Status = DiscStatus.Done;
         viewModel.SelectedDisc = viewModel.Discs[2];
         viewModel.Discs[2].Status = DiscStatus.Pending;
+        // 様式は保存対象円盤(Discs[2], #43 で円盤ごとに保持)へ設定する
+        viewModel.SelectedTemplate = BuildStoredTemplate();
 
         await viewModel.SaveAndAdvanceAsync();
 

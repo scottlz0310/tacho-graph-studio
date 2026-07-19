@@ -18,6 +18,9 @@ public sealed partial class StageViewModel : ObservableObject
     private readonly IStagePipeline _pipeline;
     private readonly ITemplateStore _templateStore;
 
+    // SelectedDisc 切替時の再同期中は SelectedTemplate → メタデータへの書き戻しを抑止する(#43)
+    private bool _isSyncingSelectedTemplateFromDisc;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedDisc))]
     [NotifyPropertyChangedFor(nameof(SaveTargetLabel))]
@@ -62,7 +65,8 @@ public sealed partial class StageViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial bool SkipHandwritten { get; set; }
 
-    // チャート紙様式の選択(FR-16)。文字入れ位置はテンプレート定義に従う
+    // 選択中円盤のチャート紙様式(FR-16、#43)。円盤ごとに DiscMetadata.SelectedTemplateId として
+    // 保持し、SelectedDisc の切替に追従する。文字入れ位置はテンプレート定義に従う
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial StoredTemplate? SelectedTemplate { get; set; }
@@ -70,6 +74,10 @@ public sealed partial class StageViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasTemplateWarning))]
     public partial string? TemplateWarning { get; set; }
+
+    // トップバーのテンプレート選択 ComboBox 用。実テンプレートに加え、末尾に
+    // TemplateEditEntry.Instance(「テンプレートを編集...」導線)を含む(#43)
+    public ObservableCollection<object> TemplateSelectionItems { get; } = [];
 
     public StageViewModel(
         IStagePipeline pipeline,
@@ -186,6 +194,21 @@ public sealed partial class StageViewModel : ObservableObject
         {
             TemplateWarning = $"テンプレートの読み込みに失敗しました: {exception.Message}";
         }
+        finally
+        {
+            RebuildTemplateSelectionItems();
+        }
+    }
+
+    private void RebuildTemplateSelectionItems()
+    {
+        TemplateSelectionItems.Clear();
+        foreach (StoredTemplate stored in Templates)
+        {
+            TemplateSelectionItems.Add(stored);
+        }
+
+        TemplateSelectionItems.Add(TemplateEditEntry.Instance);
     }
 
     // 確定保存して次へ(FR-19〜21): 回転・文字入れを本合成した透過 PNG を保存し、
@@ -298,11 +321,40 @@ public sealed partial class StageViewModel : ObservableObject
         {
             newValue.Metadata.PropertyChanged += OnSelectedDiscMetadataPropertyChanged;
         }
+
+        // SelectedTemplate を新しい円盤の選択(DiscMetadata.SelectedTemplateId)へ同期する(#43)
+        _isSyncingSelectedTemplateFromDisc = true;
+        try
+        {
+            string? templateId = newValue?.Metadata.SelectedTemplateId;
+            SelectedTemplate = templateId is null
+                ? null
+                : Templates.FirstOrDefault(stored => stored.Id == templateId);
+        }
+        finally
+        {
+            _isSyncingSelectedTemplateFromDisc = false;
+        }
     }
 
     private void OnSelectedDiscMetadataPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(SaveTargetLabel));
+    }
+
+    // ユーザーによる明示的な選択(ComboBox 操作)のみ選択中円盤のメタデータへ書き戻す。
+    // SelectedDisc 切替による再同期中は書き戻さない(無関係な円盤への誤書き込みを防ぐ)
+    partial void OnSelectedTemplateChanged(StoredTemplate? value)
+    {
+        if (_isSyncingSelectedTemplateFromDisc)
+        {
+            return;
+        }
+
+        if (SelectedDisc is { } disc)
+        {
+            disc.Metadata.SelectedTemplateId = value?.Id;
+        }
     }
 
     partial void OnTargetDateChanged(DateOnly value)
@@ -353,6 +405,8 @@ public sealed partial class StageViewModel : ObservableObject
                 };
                 item.Metadata.PrintDate = TargetDate.ToString(PrintDateFormat);
                 item.Metadata.SkipHandwritten = SkipHandwritten;
+                // 直近の選択(または起動時に復元した既定)を新規円盤の初期値として引き継ぐ(#43)
+                item.Metadata.SelectedTemplateId = SelectedTemplate?.Id;
                 Discs.Add(item);
                 SelectedDisc ??= item;
             }

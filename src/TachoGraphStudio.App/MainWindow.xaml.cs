@@ -31,6 +31,7 @@ public sealed partial class MainWindow : Window
     private readonly WindowPlacementTracker _windowPlacementTracker = new();
 
     private bool _isAppStateTrackingEnabled;
+    private bool _isRevertingTemplateSelection;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
 
     public MainWindow()
@@ -361,12 +362,35 @@ public sealed partial class MainWindow : Window
         await OpenSettingsDialogAsync();
     }
 
-    private async void OnOpenTemplateEditorButtonClick(object sender, RoutedEventArgs e)
+    private async Task OpenTemplateEditorAsync()
     {
         // 背景はステージで選択中の円盤(なければプレースホルダー円)。開いた時点の画像で固定する
         TemplateEditor.PreviewBackground = StageViewModel.SelectedDisc?.Preview;
         TemplateEditorViewModel.IsOpen = true;
         await TemplateEditorViewModel.LoadAsync();
+    }
+
+    // テンプレート選択 ComboBox の操作(#43)。末尾の「テンプレートを編集...」(TemplateEditEntry)を
+    // 選ぶと編集オーバーレイを開き、選択表示は直前の値へ戻す(実テンプレートとしては選択させない)。
+    // 通常のテンプレート選択は VM(StageViewModel.SelectedTemplate)へ反映する
+    private async void OnTemplateSelectionComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRevertingTemplateSelection || sender is not ComboBox comboBox)
+        {
+            return;
+        }
+
+        if (comboBox.SelectedItem is TemplateEditEntry)
+        {
+            _isRevertingTemplateSelection = true;
+            comboBox.SelectedItem = StageViewModel.SelectedTemplate;
+            _isRevertingTemplateSelection = false;
+
+            await OpenTemplateEditorAsync();
+            return;
+        }
+
+        StageViewModel.SelectedTemplate = comboBox.SelectedItem as StoredTemplate;
     }
 
     private async void OnRosterRetryButtonClick(object sender, RoutedEventArgs e)
