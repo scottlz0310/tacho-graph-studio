@@ -210,6 +210,15 @@
             overflow: hidden;
         }
 
+        .tacho-canvas.rotation-hover {
+            box-shadow: inset 0 0 0 3px rgba(0, 120, 212, 0.3);
+        }
+
+        .tacho-canvas.rotation-dragging {
+            box-shadow: inset 0 0 0 3px rgba(0, 120, 212, 0.6);
+            cursor: grabbing !important;
+        }
+
         /* 内包する回転用コンテナ画像 */
         .tacho-disk-img {
             width: 100%;
@@ -391,7 +400,15 @@
 
                 <!-- プレビュー -->
                 <div class="preview-area">
-                    <div class="tacho-canvas">
+                    <div
+                        class="tacho-canvas"
+                        id="tacho-canvas"
+                        onlostpointercapture="endRotationDrag()"
+                        onpointercancel="endRotationDrag()"
+                        onpointerdown="startRotationDrag(event)"
+                        onpointerleave="leaveRotationRing()"
+                        onpointermove="moveRotationDrag(event)"
+                        onpointerup="endRotationDrag(event)">
                         <!-- 十字ガイドライン（画像と同じパン/ズーム対象、回転とは独立） -->
                         <div class="guide-h"></div><div class="guide-v"></div>
 
@@ -456,11 +473,89 @@
     </div>
 
     <script>
+        const rotationDrag = {
+            active: false,
+            pointerId: null,
+            initialAngle: 0,
+            startPointerAngle: 0
+        };
+
         function rotateImage(val) {
             document.getElementById('tacho-disk').style.transform = `rotate(${val}deg)`;
             document.getElementById('rotate-slider').value = val;
             document.getElementById('rotate-number').value = val;
             document.getElementById('angle-display').innerText = `${val}°`;
+        }
+
+        function normalizeAngle(angle) {
+            let normalized = angle % 360;
+            if (normalized > 180) normalized -= 360;
+            if (normalized < -180) normalized += 360;
+            return normalized;
+        }
+
+        function pointerAngle(event, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            return Math.atan2(
+                event.clientY - (rect.top + rect.height / 2),
+                event.clientX - (rect.left + rect.width / 2)) * 180 / Math.PI;
+        }
+
+        function isInRotationRing(event, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const deltaX = event.clientX - (rect.left + rect.width / 2);
+            const deltaY = event.clientY - (rect.top + rect.height / 2);
+            const distance = Math.hypot(deltaX, deltaY);
+            const radius = Math.min(rect.width, rect.height) / 2;
+            return distance >= radius - 32 && distance <= radius;
+        }
+
+        function startRotationDrag(event) {
+            if (event.pointerType !== 'mouse' || event.button !== 0) return;
+
+            const canvas = event.currentTarget;
+            if (!isInRotationRing(event, canvas)) return;
+
+            rotationDrag.active = true;
+            rotationDrag.pointerId = event.pointerId;
+            rotationDrag.initialAngle = Number(document.getElementById('rotate-number').value);
+            rotationDrag.startPointerAngle = pointerAngle(event, canvas);
+            canvas.setPointerCapture(event.pointerId);
+            canvas.classList.add('rotation-dragging');
+            event.preventDefault();
+        }
+
+        function moveRotationDrag(event) {
+            if (event.pointerType !== 'mouse') return;
+
+            const canvas = event.currentTarget;
+            if (rotationDrag.active && rotationDrag.pointerId === event.pointerId) {
+                const delta = normalizeAngle(pointerAngle(event, canvas) - rotationDrag.startPointerAngle);
+                const angle = normalizeAngle(Math.round(normalizeAngle(rotationDrag.initialAngle + delta) * 2) / 2);
+                rotateImage(angle);
+                return;
+            }
+
+            const isHovering = isInRotationRing(event, canvas);
+            canvas.classList.toggle('rotation-hover', isHovering);
+            canvas.style.cursor = isHovering ? 'grab' : 'default';
+        }
+
+        function endRotationDrag(event) {
+            if (event && rotationDrag.pointerId !== event.pointerId) return;
+
+            rotationDrag.active = false;
+            rotationDrag.pointerId = null;
+            const canvas = document.getElementById('tacho-canvas');
+            canvas.classList.remove('rotation-dragging');
+        }
+
+        function leaveRotationRing() {
+            if (rotationDrag.active) return;
+
+            const canvas = document.getElementById('tacho-canvas');
+            canvas.classList.remove('rotation-hover');
+            canvas.style.cursor = 'default';
         }
 
         function resetRotation() {

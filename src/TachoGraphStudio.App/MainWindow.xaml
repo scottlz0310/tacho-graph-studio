@@ -331,7 +331,7 @@
                         CornerRadius="4">
                         <Grid>
                             <stage:DiscPreviewControl
-                                Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=OneWay, FallbackValue=0}"
+                                Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}"
                                 FullscreenRequested="OnPreviewFullscreenRequested"
                                 Metadata="{x:Bind StageViewModel.SelectedDisc.Metadata, Mode=OneWay, FallbackValue={x:Null}}"
                                 Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}"
@@ -457,7 +457,7 @@
             Visibility="{x:Bind StageViewModel.IsPreviewFullscreen, Mode=OneWay}">
             <stage:DiscPreviewControl
                 Margin="24"
-                Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=OneWay, FallbackValue=0}"
+                Angle="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}"
                 IsFullscreenButtonVisible="False"
                 Metadata="{x:Bind StageViewModel.SelectedDisc.Metadata, Mode=OneWay, FallbackValue={x:Null}}"
                 Source="{x:Bind StageViewModel.SelectedDisc.Preview, Mode=OneWay, FallbackValue={x:Null}}"
