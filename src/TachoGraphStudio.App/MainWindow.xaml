@@ -13,6 +13,20 @@
                 <Setter Property="TextTrimming" Value="CharacterEllipsis" />
                 <Setter Property="VerticalAlignment" Value="Center" />
             </Style>
+            <!-- テンプレート選択 ComboBox 用(#43)。実テンプレートと末尾の編集導線を描き分ける -->
+            <DataTemplate x:Key="TemplateSelectionEntryTemplate" x:DataType="coretemplates:StoredTemplate">
+                <TextBlock Text="{x:Bind Template.Name}" />
+            </DataTemplate>
+            <DataTemplate x:Key="TemplateSelectionEditEntryTemplate" x:DataType="stage:TemplateEditEntry">
+                <TextBlock
+                    FontStyle="Italic"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="テンプレートを編集..." />
+            </DataTemplate>
+            <stage:TemplateSelectionItemTemplateSelector
+                x:Key="TemplateSelectionItemTemplateSelector"
+                EditEntryTemplate="{StaticResource TemplateSelectionEditEntryTemplate}"
+                TemplateItemTemplate="{StaticResource TemplateSelectionEntryTemplate}" />
         </Grid.Resources>
         <Grid
             Grid.Row="0"
@@ -35,17 +49,16 @@
                     DateChanged="OnTargetDatePickerDateChanged"
                     DateFormat="{}{year.full}/{month.integer(2)}/{day.integer(2)}" />
                 <TextBlock VerticalAlignment="Center" Text="チャート紙様式:" />
+                <!-- 選択が主導線(#43)。編集はドロップダウン最下段の TemplateEditEntry から開く。
+                     SelectedItem は x:Bind せず code-behind で管理する(VM 駆動の変更と
+                     ユーザー操作を区別し、前者を書き戻さないため) -->
                 <ComboBox
+                    x:Name="TemplateSelectionComboBox"
                     MinWidth="180"
-                    ItemsSource="{x:Bind StageViewModel.Templates}"
-                    PlaceholderText="テンプレート未登録"
-                    SelectedItem="{x:Bind StageViewModel.SelectedTemplate, Mode=TwoWay}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="coretemplates:StoredTemplate">
-                            <TextBlock Text="{x:Bind Template.Name}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
+                    ItemTemplateSelector="{StaticResource TemplateSelectionItemTemplateSelector}"
+                    ItemsSource="{x:Bind StageViewModel.TemplateSelectionItems}"
+                    PlaceholderText="テンプレート未選択"
+                    SelectionChanged="OnTemplateSelectionComboBoxSelectionChanged" />
                 <!-- 一括指定で全円盤に適用される(アーキテクチャ §4)。取込済み・以降の取込の両方に反映 -->
                 <CheckBox
                     VerticalAlignment="Center"
@@ -56,8 +69,6 @@
                 Grid.Column="2"
                 Orientation="Horizontal"
                 Spacing="8">
-                <!-- チャート紙様式テンプレートの編集(FR-24) -->
-                <Button Click="OnOpenTemplateEditorButtonClick" Content="テンプレート" />
                 <Button Click="OnOpenSettingsButtonClick" Content="設定" />
             </StackPanel>
         </Grid>

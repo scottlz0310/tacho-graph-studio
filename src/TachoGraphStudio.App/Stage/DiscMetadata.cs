@@ -25,6 +25,11 @@ public sealed partial class DiscMetadata : ObservableObject
     [ObservableProperty]
     public partial bool SkipHandwritten { get; set; }
 
+    // 選択中のチャート紙様式テンプレート ID(円盤ごと、FR-16、#43)。
+    // ITemplateStore の ID を参照する。未選択時は null
+    [ObservableProperty]
+    public partial string? SelectedTemplateId { get; set; }
+
     public ChartTextValues ToTextValues() => new()
     {
         DateText = PrintDate,
