@@ -49,13 +49,15 @@
                     DateChanged="OnTargetDatePickerDateChanged"
                     DateFormat="{}{year.full}/{month.integer(2)}/{day.integer(2)}" />
                 <TextBlock VerticalAlignment="Center" Text="チャート紙様式:" />
-                <!-- 選択が主導線(#43)。編集はドロップダウン最下段の TemplateEditEntry から開く -->
+                <!-- 選択が主導線(#43)。編集はドロップダウン最下段の TemplateEditEntry から開く。
+                     SelectedItem は x:Bind せず code-behind で管理する(VM 駆動の変更と
+                     ユーザー操作を区別し、前者を書き戻さないため) -->
                 <ComboBox
+                    x:Name="TemplateSelectionComboBox"
                     MinWidth="180"
                     ItemTemplateSelector="{StaticResource TemplateSelectionItemTemplateSelector}"
                     ItemsSource="{x:Bind StageViewModel.TemplateSelectionItems}"
                     PlaceholderText="テンプレート未選択"
-                    SelectedItem="{x:Bind StageViewModel.SelectedTemplate, Mode=OneWay}"
                     SelectionChanged="OnTemplateSelectionComboBoxSelectionChanged" />
                 <!-- 一括指定で全円盤に適用される(アーキテクチャ §4)。取込済み・以降の取込の両方に反映 -->
                 <CheckBox

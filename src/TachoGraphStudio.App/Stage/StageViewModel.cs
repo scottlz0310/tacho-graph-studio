@@ -164,7 +164,10 @@ public sealed partial class StageViewModel : ObservableObject
     // 円盤のメタデータは読込失敗時も変更しないため、失敗後の再試行でも元の選択を復元できる)
     public async Task LoadTemplatesAsync(CancellationToken cancellationToken = default)
     {
-        string? previousSelectedId = SelectedDisc?.Metadata.SelectedTemplateId ?? SelectedTemplate?.Id;
+        // 読込対象の円盤を参照として固定する。await 中に SelectedDisc が別の円盤へ
+        // 切り替わっても、この円盤自身の補正とは独立して扱う(#43 レビュー指摘)
+        DiscWorkItem? targetDisc = SelectedDisc;
+        string? previousSelectedId = targetDisc?.Metadata.SelectedTemplateId ?? SelectedTemplate?.Id;
 
         TemplateWarning = null;
         Templates.Clear();
@@ -186,14 +189,27 @@ public sealed partial class StageViewModel : ObservableObject
                         failure => $"{failure.FileName}({failure.Message})"));
             }
 
-            StoredTemplate? resolved = Templates.FirstOrDefault(stored => stored.Id == previousSelectedId)
-                ?? Templates.FirstOrDefault();
-            SelectedTemplate = resolved;
-            if (SelectedDisc is { } disc)
+            if (targetDisc is not null)
             {
-                // 削除等で previousSelectedId が解決できずフォールバックした場合、円盤側の
-                // 保存値も新しい選択に合わせて更新する(そうしないと円盤切替時に再度ずれる)
-                disc.Metadata.SelectedTemplateId = resolved?.Id;
+                // 読込対象だった円盤の保存値を補正する(previousSelectedId が削除等で解決
+                // できない場合のみフォールバック結果に変わる)。await 中に選択が別の円盤へ
+                // 切り替わっていても、この円盤自身の補正は独立して行う
+                StoredTemplate? resolvedForTarget =
+                    Templates.FirstOrDefault(stored => stored.Id == previousSelectedId)
+                    ?? Templates.FirstOrDefault();
+                targetDisc.Metadata.SelectedTemplateId = resolvedForTarget?.Id;
+            }
+
+            if (SelectedDisc is { } currentDisc)
+            {
+                // VM の表示値は「現在選択中」の円盤(await 中に切り替わっている可能性がある)
+                // へ同期する。targetDisc と同一なら直前の補正結果と一致する
+                SyncSelectedTemplateFromDisc(currentDisc);
+            }
+            else
+            {
+                SelectedTemplate = Templates.FirstOrDefault(stored => stored.Id == previousSelectedId)
+                    ?? Templates.FirstOrDefault();
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -343,9 +359,21 @@ public sealed partial class StageViewModel : ObservableObject
             newValue.Metadata.PropertyChanged += OnSelectedDiscMetadataPropertyChanged;
         }
 
-        // SelectedTemplate を新しい円盤の選択(DiscMetadata.SelectedTemplateId)へ同期する(#43)。
-        // SelectedTemplate の setter に書き戻し副作用はないため、直接代入するだけでよい
-        string? templateId = newValue?.Metadata.SelectedTemplateId;
+        // SelectedTemplate を新しい円盤の選択(DiscMetadata.SelectedTemplateId)へ同期する(#43)
+        if (newValue is not null)
+        {
+            SyncSelectedTemplateFromDisc(newValue);
+        }
+        else
+        {
+            SelectedTemplate = null;
+        }
+    }
+
+    // SelectedTemplate の setter に書き戻し副作用はないため、直接代入するだけでよい
+    private void SyncSelectedTemplateFromDisc(DiscWorkItem disc)
+    {
+        string? templateId = disc.Metadata.SelectedTemplateId;
         SelectedTemplate = templateId is null
             ? null
             : Templates.FirstOrDefault(stored => stored.Id == templateId);

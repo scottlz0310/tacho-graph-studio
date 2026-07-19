@@ -12,18 +12,26 @@ internal sealed class FakeTemplateStore : ITemplateStore
     // 設定すると次の操作でこの例外を投げる
     public Exception? NextException { get; set; }
 
+    // 設定すると ListAsync がこのシグナルの完了まで待機する(呼び出し中の状態遷移をテストするため)
+    public TaskCompletionSource<bool>? ListGate { get; set; }
+
     public IReadOnlyDictionary<string, ChartTemplate> Saved => _templates;
 
     public List<string> DeletedIds { get; } = [];
 
-    public Task<TemplateStoreListResult> ListAsync(CancellationToken cancellationToken = default)
+    public async Task<TemplateStoreListResult> ListAsync(CancellationToken cancellationToken = default)
     {
+        if (ListGate is { } gate)
+        {
+            await gate.Task;
+        }
+
         ThrowIfConfigured();
-        return Task.FromResult(new TemplateStoreListResult(
+        return new TemplateStoreListResult(
             [.. _templates
                 .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(pair => new StoredTemplate(pair.Key, pair.Value))],
-            ListFailures));
+            ListFailures);
     }
 
     public Task<StoredTemplate> SaveAsync(

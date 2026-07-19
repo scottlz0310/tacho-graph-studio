@@ -31,7 +31,7 @@ public sealed partial class MainWindow : Window
     private readonly WindowPlacementTracker _windowPlacementTracker = new();
 
     private bool _isAppStateTrackingEnabled;
-    private bool _isRevertingTemplateSelection;
+    private readonly TemplateSelectionComboBoxController _templateSelectionController;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
 
     public MainWindow()
@@ -69,6 +69,13 @@ public sealed partial class MainWindow : Window
         TemplateEditor.ViewModel = TemplateEditorViewModel;
         TemplateEditor.HostWindow = this;
 
+        // テンプレート選択 ComboBox の SelectedItem 同期(#43)。VM 駆動の変更と
+        // ユーザー操作を切り分けるロジックは WinUI 非依存のコントローラへ切り出し済み
+        _templateSelectionController = new TemplateSelectionComboBoxController(
+            item => TemplateSelectionComboBox.SelectedItem = item,
+            StageViewModel.SelectTemplateForSelectedDisc,
+            OpenTemplateEditorAsync);
+
         // 名簿の行選択・再クリックを選択中円盤のメタデータへ反映する(FR-13)。
         // 選択変更に依存しないため、同じ行を複数の円盤へ続けて適用できる
         RosterViewModel.EntryActivated += (_, entry) => StageViewModel.ApplyRosterEntry(entry);
@@ -80,6 +87,16 @@ public sealed partial class MainWindow : Window
                 && !TemplateEditorViewModel.IsOpen)
             {
                 await StageViewModel.LoadTemplatesAsync();
+            }
+        };
+
+        // OnRootGridLoaded の LoadTemplatesAsync/ApplySavedTemplateSelection より前に
+        // 購読しておく必要があるためコンストラクタで行う
+        StageViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(StageViewModel.SelectedTemplate))
+            {
+                _templateSelectionController.ApplyFromViewModel(StageViewModel.SelectedTemplate);
             }
         };
 
@@ -370,27 +387,16 @@ public sealed partial class MainWindow : Window
         await TemplateEditorViewModel.LoadAsync();
     }
 
-    // テンプレート選択 ComboBox の操作(#43)。末尾の「テンプレートを編集...」(TemplateEditEntry)を
-    // 選ぶと編集オーバーレイを開き、選択表示は直前の値へ戻す(実テンプレートとしては選択させない)。
-    // 通常のテンプレート選択は VM(StageViewModel.SelectedTemplate)へ反映する
+    // テンプレート選択 ComboBox の SelectionChanged(#43)。VM 駆動の変更とユーザー操作の
+    // 区別・「テンプレートを編集...」選択時の revert とエディタ起動は
+    // TemplateSelectionComboBoxController(WinUI 非依存、ユニットテスト対象)に委譲する
     private async void OnTemplateSelectionComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_isRevertingTemplateSelection || sender is not ComboBox comboBox)
+        if (sender is ComboBox comboBox)
         {
-            return;
+            await _templateSelectionController.OnSelectionChangedAsync(
+                comboBox.SelectedItem, StageViewModel.SelectedTemplate);
         }
-
-        if (comboBox.SelectedItem is TemplateEditEntry)
-        {
-            _isRevertingTemplateSelection = true;
-            comboBox.SelectedItem = StageViewModel.SelectedTemplate;
-            _isRevertingTemplateSelection = false;
-
-            await OpenTemplateEditorAsync();
-            return;
-        }
-
-        StageViewModel.SelectTemplateForSelectedDisc(comboBox.SelectedItem as StoredTemplate);
     }
 
     private async void OnRosterRetryButtonClick(object sender, RoutedEventArgs e)
