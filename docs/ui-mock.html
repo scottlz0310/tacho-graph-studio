@@ -126,6 +126,14 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
+        .stage-command-bar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
         /* サムネイルナビゲーション */
         .thumb-nav {
             display: flex;
@@ -302,11 +310,6 @@
             <label for="target-date">処理対象日:</label>
             <input type="date" id="target-date" value="2026-12-25" onchange="syncText()">
             
-            <label for="template-select">⚙️ チャート紙様式:</label>
-            <select id="template-select" onchange="changeTemplateLayout()">
-                <option value="yazaki">ヤザキ標準 (中央上)</option>
-                <option value="taskmeter">タスクメーター用 (右下寄り)</option>
-            </select>
         </div>
         <div>
             <input type="checkbox" id="skip-text" onchange="toggleSkip()">
@@ -341,6 +344,17 @@
 
         <!-- 右：ステージ -->
         <div class="stage">
+            <!-- ステージコマンドバー（#52） -->
+            <div class="stage-command-bar">
+                <button class="btn-primary">シート取込</button>
+                <select id="template-select" aria-label="チャート紙様式" onchange="changeTemplateLayout()">
+                    <option value="yazaki">ヤザキ標準 (中央上)</option>
+                    <option value="taskmeter">タスクメーター用 (右下寄り)</option>
+                    <option value="edit">テンプレートを編集...</option>
+                </select>
+                <button class="btn-secondary">設定</button>
+            </div>
+
             <!-- サムネイルナビゲーション -->
             <div class="thumb-nav">
                 <div class="thumb-item active">No.1</div>
@@ -465,7 +479,15 @@
         }
         
         function changeTemplateLayout() {
-            const type = document.getElementById('template-select').value;
+            const select = document.getElementById('template-select');
+            const type = select.value;
+            if (type === 'edit') {
+                alert('テンプレート編集画面を開きます');
+                select.value = select.dataset.lastValue || 'yazaki';
+                return;
+            }
+
+            select.dataset.lastValue = type;
             const textEl = document.getElementById('overlay-text');
             if(type === 'yazaki') {
                 textEl.style.top = '25%'; textEl.style.left = '50%';
