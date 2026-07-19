@@ -390,7 +390,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        StageViewModel.SelectedTemplate = comboBox.SelectedItem as StoredTemplate;
+        StageViewModel.SelectTemplateForSelectedDisc(comboBox.SelectedItem as StoredTemplate);
     }
 
     private async void OnRosterRetryButtonClick(object sender, RoutedEventArgs e)

@@ -386,9 +386,9 @@ public sealed class StageViewModelTests : IDisposable
         await viewModel.LoadTemplatesAsync();
         await viewModel.ImportAsync(["sheet.pdf"]);
         // 円盤ごとに異なる様式を選択する(#43)
-        viewModel.SelectedTemplate = viewModel.Templates[1];
+        viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
         viewModel.SelectedDisc = viewModel.Discs[1];
-        viewModel.SelectedTemplate = viewModel.Templates[0];
+        viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[0]);
 
         viewModel.SelectedDisc = viewModel.Discs[0];
         Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
@@ -416,6 +416,36 @@ public sealed class StageViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadTemplatesAsync_FailureThenRetryRestoresSelectedDiscTemplate()
+    {
+        // 選択済み円盤がある状態で ListAsync が失敗しても円盤のメタデータを変更せず、
+        // 再試行(成功)時に元の選択を復元できることを確認する(#43 レビュー指摘)
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = new(
+            pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        await viewModel.ImportAsync(["sheet.pdf"]);
+        viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
+
+        store.NextException = new IOException("一時的な失敗");
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.True(viewModel.HasTemplateWarning);
+        Assert.Null(viewModel.SelectedTemplate);
+        // 失敗時は円盤側の保存値を変更しない
+        Assert.Equal("Yazaki45", viewModel.Discs[0].Metadata.SelectedTemplateId);
+
+        await viewModel.LoadTemplatesAsync();
+
+        Assert.False(viewModel.HasTemplateWarning);
+        Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
+        Assert.Equal("Yazaki45", viewModel.Discs[0].Metadata.SelectedTemplateId);
+    }
+
+    [Fact]
     public async Task ImportAsync_NewDiscsInheritCurrentlySelectedTemplate()
     {
         FakeTemplateStore store = new();
@@ -425,11 +455,33 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = new(
             pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
         await viewModel.LoadTemplatesAsync();
-        viewModel.SelectedTemplate = viewModel.Templates[1];
+        viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
 
         await viewModel.ImportAsync(["sheet.pdf"]);
 
         Assert.Equal("Yazaki45", viewModel.Discs[0].Metadata.SelectedTemplateId);
+        Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
+    }
+
+    [Fact]
+    public async Task ImportAsync_ReimportWithSelectedDiscInheritsPreviouslySelectedTemplate()
+    {
+        // 取込→様式選択→再取込。ImportAsync 冒頭の SelectedDisc = null による
+        // SelectedTemplate リセットより前に選択を退避できているかを確認する(#43 レビュー指摘)
+        FakeTemplateStore store = new();
+        await store.SaveAsync(id: null, BuildTemplate("Task-Meter"));
+        await store.SaveAsync(id: null, BuildTemplate("Yazaki45"));
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = new(
+            pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
+        await viewModel.LoadTemplatesAsync();
+        await viewModel.ImportAsync(["first.pdf"]);
+        viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
+
+        pipeline.Discs = [BuildDisc(0), BuildDisc(1)];
+        await viewModel.ImportAsync(["second.pdf"]);
+
+        Assert.All(viewModel.Discs, disc => Assert.Equal("Yazaki45", disc.Metadata.SelectedTemplateId));
         Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
     }
 

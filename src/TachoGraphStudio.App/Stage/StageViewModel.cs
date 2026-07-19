@@ -18,9 +18,6 @@ public sealed partial class StageViewModel : ObservableObject
     private readonly IStagePipeline _pipeline;
     private readonly ITemplateStore _templateStore;
 
-    // SelectedDisc 切替時の再同期中は SelectedTemplate → メタデータへの書き戻しを抑止する(#43)
-    private bool _isSyncingSelectedTemplateFromDisc;
-
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedDisc))]
     [NotifyPropertyChangedFor(nameof(SaveTargetLabel))]
@@ -162,10 +159,12 @@ public sealed partial class StageViewModel : ObservableObject
     }
 
     // テンプレート一覧の読込(FR-16)。一部の読込失敗は警告に留め、名簿・ステージ機能は継続する。
-    // 再読込では選択中の様式(Id)を維持し、削除されていた場合のみ先頭へフォールバックする
+    // 再読込では選択中の様式(Id)を維持し、削除されていた場合のみ先頭へフォールバックする。
+    // 復元元は選択中円盤の保存値を優先する(SelectedTemplate は読込中に一時的に null になるが、
+    // 円盤のメタデータは読込失敗時も変更しないため、失敗後の再試行でも元の選択を復元できる)
     public async Task LoadTemplatesAsync(CancellationToken cancellationToken = default)
     {
-        string? previousSelectedId = SelectedTemplate?.Id;
+        string? previousSelectedId = SelectedDisc?.Metadata.SelectedTemplateId ?? SelectedTemplate?.Id;
 
         TemplateWarning = null;
         Templates.Clear();
@@ -187,16 +186,38 @@ public sealed partial class StageViewModel : ObservableObject
                         failure => $"{failure.FileName}({failure.Message})"));
             }
 
-            SelectedTemplate = Templates.FirstOrDefault(stored => stored.Id == previousSelectedId)
+            StoredTemplate? resolved = Templates.FirstOrDefault(stored => stored.Id == previousSelectedId)
                 ?? Templates.FirstOrDefault();
+            SelectedTemplate = resolved;
+            if (SelectedDisc is { } disc)
+            {
+                // 削除等で previousSelectedId が解決できずフォールバックした場合、円盤側の
+                // 保存値も新しい選択に合わせて更新する(そうしないと円盤切替時に再度ずれる)
+                disc.Metadata.SelectedTemplateId = resolved?.Id;
+            }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // 失敗時は円盤のメタデータに触れない。previousSelectedId は円盤の保存値から
+            // 取得しているため、次回の再試行でも元の選択を正しく復元できる
             TemplateWarning = $"テンプレートの読み込みに失敗しました: {exception.Message}";
         }
         finally
         {
             RebuildTemplateSelectionItems();
+        }
+    }
+
+    // ユーザーによる明示的なテンプレート選択(トップバー ComboBox 操作、#43)。
+    // 選択中円盤のメタデータへ書き戻す。内部的なリセット(ImportAsync・LoadTemplatesAsync・
+    // 円盤切替時の再同期)はこのメソッドを経由せず SelectedTemplate を直接設定するため、
+    // 意図しない書き戻しは発生しない
+    public void SelectTemplateForSelectedDisc(StoredTemplate? template)
+    {
+        SelectedTemplate = template;
+        if (SelectedDisc is { } disc)
+        {
+            disc.Metadata.SelectedTemplateId = template?.Id;
         }
     }
 
@@ -322,39 +343,17 @@ public sealed partial class StageViewModel : ObservableObject
             newValue.Metadata.PropertyChanged += OnSelectedDiscMetadataPropertyChanged;
         }
 
-        // SelectedTemplate を新しい円盤の選択(DiscMetadata.SelectedTemplateId)へ同期する(#43)
-        _isSyncingSelectedTemplateFromDisc = true;
-        try
-        {
-            string? templateId = newValue?.Metadata.SelectedTemplateId;
-            SelectedTemplate = templateId is null
-                ? null
-                : Templates.FirstOrDefault(stored => stored.Id == templateId);
-        }
-        finally
-        {
-            _isSyncingSelectedTemplateFromDisc = false;
-        }
+        // SelectedTemplate を新しい円盤の選択(DiscMetadata.SelectedTemplateId)へ同期する(#43)。
+        // SelectedTemplate の setter に書き戻し副作用はないため、直接代入するだけでよい
+        string? templateId = newValue?.Metadata.SelectedTemplateId;
+        SelectedTemplate = templateId is null
+            ? null
+            : Templates.FirstOrDefault(stored => stored.Id == templateId);
     }
 
     private void OnSelectedDiscMetadataPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(SaveTargetLabel));
-    }
-
-    // ユーザーによる明示的な選択(ComboBox 操作)のみ選択中円盤のメタデータへ書き戻す。
-    // SelectedDisc 切替による再同期中は書き戻さない(無関係な円盤への誤書き込みを防ぐ)
-    partial void OnSelectedTemplateChanged(StoredTemplate? value)
-    {
-        if (_isSyncingSelectedTemplateFromDisc)
-        {
-            return;
-        }
-
-        if (SelectedDisc is { } disc)
-        {
-            disc.Metadata.SelectedTemplateId = value?.Id;
-        }
     }
 
     partial void OnTargetDateChanged(DateOnly value)
@@ -381,6 +380,9 @@ public sealed partial class StageViewModel : ObservableObject
             return;
         }
 
+        // 直近の選択(新規円盤の初期値、#43)は SelectedDisc = null で失われる前に退避する
+        string? lastUsedTemplateId = SelectedTemplate?.Id;
+
         IsImporting = true;
         ImportError = null;
         SelectedDisc = null;
@@ -406,7 +408,7 @@ public sealed partial class StageViewModel : ObservableObject
                 item.Metadata.PrintDate = TargetDate.ToString(PrintDateFormat);
                 item.Metadata.SkipHandwritten = SkipHandwritten;
                 // 直近の選択(または起動時に復元した既定)を新規円盤の初期値として引き継ぐ(#43)
-                item.Metadata.SelectedTemplateId = SelectedTemplate?.Id;
+                item.Metadata.SelectedTemplateId = lastUsedTemplateId;
                 Discs.Add(item);
                 SelectedDisc ??= item;
             }
