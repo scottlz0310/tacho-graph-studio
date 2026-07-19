@@ -47,7 +47,7 @@ public sealed class DiscWorkItemTests
             IndexInSheet: 0,
             Width: 2,
             Height: 2,
-            PremultipliedBgra: new byte[16],
+            Bgra: new byte[16],
             ThumbnailWidth: 1,
             ThumbnailHeight: 1,
             ThumbnailPremultipliedBgra: new byte[4],

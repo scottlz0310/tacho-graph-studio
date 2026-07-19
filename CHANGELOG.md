@@ -43,6 +43,9 @@
 - `Core.Templates`: `ChartTextComposer`（FR-16, FR-18）。テンプレートのフィールド名（date_year/date_month/date_day/vehicle_no/driver/vehicle_type）と入力値（`ChartTextValues`）の対応付け + 配置計算。日付は「2026/12/25」形式の文字列を区切り文字で分解し、和暦等の非数値表記も通す。プレビューの文字レイヤー（#13）と確定保存の本合成（#14）が共有する
 - App: 文字入れメタデータ（FR-13〜15, FR-17 第 1 弾）。`DiscMetadata`（印字日付・登録番号・運転者名・車種・手書きスキップ）を円盤ごとに保持し、名簿の行選択で選択中円盤へ自動反映（FR-13）、処理対象日 `TargetDate` の変更で全円盤の印字日付へ一括同期（FR-14）、個別の手修正は次の一括指定まで保持（FR-15）。`StageViewModel` にチャート紙様式の選択（`FileTemplateStore` から読込、FR-16）を追加。トップバー・メタデータエディタ・プレビュー文字レイヤーの UI は第 2 弾で実装
 - App: 文字入れ・メタデータエディタ UI（FR-13〜18 第 2 弾）。トップバーに処理対象日（`CalendarDatePicker`、印字日付へ一括同期）・チャート紙様式 `ComboBox`・手書きスキップを配置し、回転補正の下に印字日付・登録番号・運転者名の手修正エディタ行を追加。`DiscPreviewControl` に文字入れレイヤー（`ChartTextComposer` による配置計算。画像の回転と独立し、ズーム・スクロールに追従。表示中の画像実寸に合わせてレターボックスを除外）を実装し、メタデータ変更をリアルタイム反映。手書きスキップ時は文字レイヤーを非表示にする
+- `Core.Naming`: 出力ファイル名の生成（FR-17, FR-20 第 1 弾）。`OutputNaming.CreateFileName` が `YYYYMMDD_登録番号_運転者.png`（手書きスキップ時は運転者部を「手書き」）を生成。印字日付（手修正可能な文字列）は区切り文字を除いて日付部にし、ファイル名に使えない文字はサニタイズする
+- `Core.Imaging`: 本合成（FR-19 第 1 弾）。`DiscComposer.ComposePng` が回転補正（プレビューと同じ時計回り、premultiplied 補間）と文字入れ（`ChartTextComposer` の配置、回転と独立）をフル解像度で合成しアルファ付き PNG を生成する。文字描画は SkiaSharp を新規導入（OpenCV の `putText` は日本語非対応のため。§1.3 の代替検討条項に基づく）。指定フォントに無いグリフはフォールバックし日本語を正しく描画する
+- `Core.Imaging`: `PremultipliedAlpha`。本合成の入力を無劣化に保つため `ProcessedDisc` のフル解像度をストレートアルファ BGRA に変更し、表示用の premultiplied 変換を利用側で行うようにした（サムネイルは縮小補間の色にじみを避けるため premultiplied のまま）。保存フロー UI（ファイル名プレビュー・確定保存して次へ）は第 2 弾で実装
 
 ### Changed
 

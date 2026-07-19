@@ -78,6 +78,8 @@ public sealed class StagePipeline : IStagePipeline
 
     private static ProcessedDisc ToProcessedDisc(DiscImage disc, BackgroundRemovalResult removed)
     {
+        // サムネイルのみ premultiplied で縮小する(ストレートアルファの縮小補間は
+        // 透明画素の色がにじむため)。フル解像度はストレートのまま保持し本合成に使う
         using Mat premultiplied = Premultiply(removed.Pixels);
 
         double thumbnailScale = Math.Min(
@@ -98,9 +100,9 @@ public sealed class StagePipeline : IStagePipeline
             disc.SourcePath,
             disc.PageIndex,
             disc.Index,
-            premultiplied.Width,
-            premultiplied.Height,
-            ToBytes(premultiplied),
+            removed.Pixels.Width,
+            removed.Pixels.Height,
+            ToBytes(removed.Pixels),
             thumbnail.Width,
             thumbnail.Height,
             ToBytes(thumbnail),

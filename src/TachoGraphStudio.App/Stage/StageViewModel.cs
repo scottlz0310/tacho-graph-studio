@@ -177,7 +177,11 @@ public sealed partial class StageViewModel : ObservableObject
                         disc.ThumbnailPremultipliedBgra,
                         disc.ThumbnailWidth,
                         disc.ThumbnailHeight),
-                    Preview = _imageSourceFactory.Create(disc.PremultipliedBgra, disc.Width, disc.Height),
+                    // フル解像度はストレートアルファで保持しているため、表示用にのみ変換する
+                    Preview = _imageSourceFactory.Create(
+                        PremultipliedAlpha.FromStraightBgra(disc.Bgra),
+                        disc.Width,
+                        disc.Height),
                 };
                 item.Metadata.PrintDate = TargetDate.ToString(PrintDateFormat);
                 item.Metadata.SkipHandwritten = SkipHandwritten;
