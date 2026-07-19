@@ -7,7 +7,7 @@
     xmlns:stage="using:TachoGraphStudio.App.Stage"
     xmlns:templates="using:TachoGraphStudio.App.Templates"
     xmlns:tv="using:WinUI.TableView">
-    <Grid x:Name="RootGrid" Loaded="OnRootGridLoaded" RowDefinitions="Auto,*">
+    <Grid x:Name="RootGrid" Loaded="OnRootGridLoaded" RowDefinitions="Auto,Auto,*">
         <Grid.Resources>
             <Style x:Key="RosterCellTextStyle" TargetType="TextBlock">
                 <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -61,7 +61,16 @@
                 <Button Click="OnOpenSettingsButtonClick" Content="設定" />
             </StackPanel>
         </Grid>
-        <Grid Grid.Row="1" Padding="16,0,16,16">
+        <!-- アプリ状態の保存失敗(FR-22)。機能は継続するため警告に留める -->
+        <InfoBar
+            Grid.Row="1"
+            Margin="16,0,16,8"
+            IsClosable="True"
+            IsOpen="{x:Bind AppStateSaver.HasError, Mode=OneWay}"
+            Message="{x:Bind AppStateSaver.LastError, Mode=OneWay}"
+            Severity="Warning"
+            Title="設定の保存に失敗しました" />
+        <Grid Grid.Row="2" Padding="16,0,16,16">
             <Grid.ColumnDefinitions>
                 <!-- サイドバー幅はスプリッタで可変(#25)。ウィンドウ状態の永続化は #15 -->
                 <ColumnDefinition
@@ -400,7 +409,7 @@
         <!-- 全画面拡大プレビュー（FR-08） -->
         <Grid
             Grid.Row="0"
-            Grid.RowSpan="2"
+            Grid.RowSpan="3"
             Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
             Visibility="{x:Bind StageViewModel.IsPreviewFullscreen, Mode=OneWay}">
             <stage:DiscPreviewControl
@@ -421,7 +430,7 @@
         <templates:TemplateEditorOverlay
             x:Name="TemplateEditor"
             Grid.Row="0"
-            Grid.RowSpan="2"
+            Grid.RowSpan="3"
             Visibility="{x:Bind TemplateEditorViewModel.IsOpen, Mode=OneWay}" />
     </Grid>
 </Window>

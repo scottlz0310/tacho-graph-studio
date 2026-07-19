@@ -24,9 +24,14 @@ namespace TachoGraphStudio.App;
 
 public sealed partial class MainWindow : Window
 {
+    private readonly IAppStateStore _appStateStore;
     private readonly SupabaseCredentialsValidator _credentialsValidator;
     private readonly HttpClient _httpClient = new();
     private readonly ISecretStore _secretStore;
+    private readonly WindowPlacementTracker _windowPlacementTracker = new();
+
+    private bool _isAppStateTrackingEnabled;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
 
     public MainWindow()
     {
@@ -35,6 +40,14 @@ public sealed partial class MainWindow : Window
 
         string localCacheFolderPath = ApplicationData.Current.LocalCacheFolder.Path;
         string localFolderPath = ApplicationData.Current.LocalFolder.Path;
+
+        _appStateStore = new JsonAppStateStore(
+            Path.Combine(localFolderPath, "settings", "app-state.json"));
+        // 変更通知(InfoBar の DP 更新)を UI スレッドへ marshal する。終了時 flush は
+        // ワーカースレッドで走るため必須。キュー停止後(シャットダウン中)は通知を破棄する
+        AppStateSaver = new AppStateSaver(
+            _appStateStore,
+            action => DispatcherQueue.TryEnqueue(() => action()));
 
         _secretStore = new DpapiSecretStore(
             Path.Combine(localCacheFolderPath, "secrets", "supabase.secret.json"));
@@ -68,7 +81,13 @@ public sealed partial class MainWindow : Window
                 await StageViewModel.LoadTemplatesAsync();
             }
         };
+
+        // 起動処理(OnRootGridLoaded)の await 中に最大化されても配置を保存できるよう、
+        // ウィンドウ表示前(必ず通常表示)の bounds でトラッカーを初期化する
+        _windowPlacementTracker.Initialize(IsPresenterRestored(), CurrentWindowBounds());
     }
+
+    public AppStateSaver AppStateSaver { get; }
 
     public RosterViewModel RosterViewModel { get; }
 
@@ -136,6 +155,10 @@ public sealed partial class MainWindow : Window
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
+        // アプリ状態の復元(FR-22)。読込失敗時は既定値で継続する
+        AppState? appState = await TryReadAppStateAsync();
+        ApplyAppState(appState);
+
         TargetDatePicker.Date = new DateTimeOffset(
             StageViewModel.TargetDate.ToDateTime(TimeOnly.MinValue));
 
@@ -143,7 +166,178 @@ public sealed partial class MainWindow : Window
         ApplyFilterSettingsToControls();
 
         await StageViewModel.LoadTemplatesAsync();
+        ApplySavedTemplateSelection(appState?.SelectedTemplateId);
+
+        // 復元が終わってから変更追跡を開始する(復元途中の保存を避ける)
+        StartAppStateTracking();
+
         await RefreshSupabaseConnectionAsync(promptIfUnset: true);
+    }
+
+    private async Task<AppState?> TryReadAppStateAsync()
+    {
+        try
+        {
+            return await _appStateStore.ReadAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // 破損・旧バージョン等は既定値で起動する(致命的にしない)
+            return null;
+        }
+    }
+
+    private void ApplyAppState(AppState? state)
+    {
+        if (state is null)
+        {
+            return;
+        }
+
+        if (state.OutputDirectory is { } outputDirectory && Directory.Exists(outputDirectory))
+        {
+            StageViewModel.OutputDirectory = outputDirectory;
+        }
+
+        if (state.LastTargetDate is { } lastTargetDate)
+        {
+            StageViewModel.TargetDate = lastTargetDate;
+        }
+
+        if (state.SidebarWidth is { } sidebarWidth && double.IsFinite(sidebarWidth))
+        {
+            SidebarColumn.Width = new GridLength(
+                Math.Clamp(sidebarWidth, SidebarColumn.MinWidth, SidebarColumn.MaxWidth));
+        }
+
+        ApplyWindowPlacement(state.Window);
+    }
+
+    private void ApplyWindowPlacement(WindowPlacement? placement)
+    {
+        if (placement is not { Width: > 0, Height: > 0 })
+        {
+            return;
+        }
+
+        Windows.Graphics.RectInt32 bounds = new(
+            placement.X, placement.Y, placement.Width, placement.Height);
+
+        // モニタ構成の変更で画面外に復元されないよう、最寄りディスプレイの作業領域へ収める
+        Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea
+            .GetFromRect(bounds, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+        Windows.Graphics.RectInt32 workArea = displayArea.WorkArea;
+        int width = Math.Min(bounds.Width, workArea.Width);
+        int height = Math.Min(bounds.Height, workArea.Height);
+        int x = Math.Clamp(bounds.X, workArea.X, workArea.X + workArea.Width - width);
+        int y = Math.Clamp(bounds.Y, workArea.Y, workArea.Y + workArea.Height - height);
+
+        AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
+        _windowPlacementTracker.Seed(new Windows.Graphics.RectInt32(x, y, width, height));
+
+        if (placement.IsMaximized
+            && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+        {
+            presenter.Maximize();
+        }
+    }
+
+    private void ApplySavedTemplateSelection(string? templateId)
+    {
+        if (templateId is null)
+        {
+            return;
+        }
+
+        StoredTemplate? saved = StageViewModel.Templates
+            .FirstOrDefault(stored => stored.Id == templateId);
+        if (saved is not null)
+        {
+            StageViewModel.SelectedTemplate = saved;
+        }
+    }
+
+    private void StartAppStateTracking()
+    {
+        if (_isAppStateTrackingEnabled)
+        {
+            return;
+        }
+
+        _isAppStateTrackingEnabled = true;
+
+        _saveAppStateTimer = DispatcherQueue.CreateTimer();
+        _saveAppStateTimer.Interval = TimeSpan.FromMilliseconds(500);
+        _saveAppStateTimer.IsRepeating = false;
+        _saveAppStateTimer.Tick += async (_, _) => await SaveAppStateAsync();
+
+        StageViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(StageViewModel.OutputDirectory)
+                or nameof(StageViewModel.TargetDate)
+                or nameof(StageViewModel.SelectedTemplate))
+            {
+                RequestSaveAppState();
+            }
+        };
+
+        AppWindow.Changed += (_, args) =>
+        {
+            if (args.DidPositionChange || args.DidSizeChange)
+            {
+                _windowPlacementTracker.OnBoundsChanged(IsPresenterRestored(), CurrentWindowBounds());
+                RequestSaveAppState();
+            }
+        };
+
+        Closed += OnMainWindowClosed;
+    }
+
+    private bool IsPresenterRestored() =>
+        AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+        {
+            State: Microsoft.UI.Windowing.OverlappedPresenterState.Restored,
+        };
+
+    private Windows.Graphics.RectInt32 CurrentWindowBounds() => new(
+        AppWindow.Position.X,
+        AppWindow.Position.Y,
+        AppWindow.Size.Width,
+        AppWindow.Size.Height);
+
+    // 変更をまとめて書き込むデバウンス(500ms)。終了時は Closed で最終保存する
+    private void RequestSaveAppState()
+    {
+        _saveAppStateTimer?.Stop();
+        _saveAppStateTimer?.Start();
+    }
+
+    private void OnMainWindowClosed(object sender, WindowEventArgs args)
+    {
+        _saveAppStateTimer?.Stop();
+
+        // 終了時の最終保存。fault は AppStateSaver 内で捕捉され、タイムアウトも false として
+        // 明示的に扱われる(UI スレッドへ throw しない)。失敗理由はトレースログへ伝播する
+        AppStateSaver.TryFlush(CaptureAppState(), TimeSpan.FromSeconds(2));
+    }
+
+    private Task SaveAppStateAsync() => AppStateSaver.TrySaveAsync(CaptureAppState());
+
+    private AppState CaptureAppState()
+    {
+        bool isMaximized = AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+        {
+            State: Microsoft.UI.Windowing.OverlappedPresenterState.Maximized,
+        };
+
+        return new AppState
+        {
+            OutputDirectory = StageViewModel.OutputDirectory,
+            LastTargetDate = StageViewModel.TargetDate,
+            SelectedTemplateId = StageViewModel.SelectedTemplate?.Id,
+            SidebarWidth = SidebarColumn.ActualWidth,
+            Window = _windowPlacementTracker.Capture(isMaximized),
+        };
     }
 
     // 処理対象日の一括指定(FR-14)。クリア(null)時は表示を直前の日付へ戻し、
