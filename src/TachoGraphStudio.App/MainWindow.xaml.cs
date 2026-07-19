@@ -24,14 +24,15 @@ namespace TachoGraphStudio.App;
 
 public sealed partial class MainWindow : Window
 {
+    private readonly AppStateSaver _appStateSaver;
     private readonly IAppStateStore _appStateStore;
     private readonly SupabaseCredentialsValidator _credentialsValidator;
     private readonly HttpClient _httpClient = new();
     private readonly ISecretStore _secretStore;
+    private readonly WindowPlacementTracker _windowPlacementTracker = new();
 
     private bool _isAppStateTrackingEnabled;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
-    private Windows.Graphics.RectInt32? _normalWindowBounds;
 
     public MainWindow()
     {
@@ -43,6 +44,7 @@ public sealed partial class MainWindow : Window
 
         _appStateStore = new JsonAppStateStore(
             Path.Combine(localFolderPath, "settings", "app-state.json"));
+        _appStateSaver = new AppStateSaver(_appStateStore);
 
         _secretStore = new DpapiSecretStore(
             Path.Combine(localCacheFolderPath, "secrets", "supabase.secret.json"));
@@ -222,7 +224,7 @@ public sealed partial class MainWindow : Window
         int y = Math.Clamp(bounds.Y, workArea.Y, workArea.Y + workArea.Height - height);
 
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
-        _normalWindowBounds = new Windows.Graphics.RectInt32(x, y, width, height);
+        _windowPlacementTracker.Seed(new Windows.Graphics.RectInt32(x, y, width, height));
 
         if (placement.IsMaximized
             && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
@@ -255,6 +257,12 @@ public sealed partial class MainWindow : Window
 
         _isAppStateTrackingEnabled = true;
 
+        // 移動・リサイズせずに最大化して閉じても配置を保存できるよう、
+        // 追跡開始時点の通常表示 bounds で初期化する
+        _windowPlacementTracker.Initialize(
+            IsPresenterRestored(),
+            CurrentWindowBounds());
+
         _saveAppStateTimer = DispatcherQueue.CreateTimer();
         _saveAppStateTimer.Interval = TimeSpan.FromMilliseconds(500);
         _saveAppStateTimer.IsRepeating = false;
@@ -274,25 +282,25 @@ public sealed partial class MainWindow : Window
         {
             if (args.DidPositionChange || args.DidSizeChange)
             {
-                // 最大化中の座標は復元に使えないため、通常表示時の位置・サイズのみ記録する
-                if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
-                    {
-                        State: Microsoft.UI.Windowing.OverlappedPresenterState.Restored,
-                    })
-                {
-                    _normalWindowBounds = new Windows.Graphics.RectInt32(
-                        AppWindow.Position.X,
-                        AppWindow.Position.Y,
-                        AppWindow.Size.Width,
-                        AppWindow.Size.Height);
-                }
-
+                _windowPlacementTracker.OnBoundsChanged(IsPresenterRestored(), CurrentWindowBounds());
                 RequestSaveAppState();
             }
         };
 
         Closed += OnMainWindowClosed;
     }
+
+    private bool IsPresenterRestored() =>
+        AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+        {
+            State: Microsoft.UI.Windowing.OverlappedPresenterState.Restored,
+        };
+
+    private Windows.Graphics.RectInt32 CurrentWindowBounds() => new(
+        AppWindow.Position.X,
+        AppWindow.Position.Y,
+        AppWindow.Size.Width,
+        AppWindow.Size.Height);
 
     // 変更をまとめて書き込むデバウンス(500ms)。終了時は Closed で最終保存する
     private void RequestSaveAppState()
@@ -305,23 +313,12 @@ public sealed partial class MainWindow : Window
     {
         _saveAppStateTimer?.Stop();
 
-        // UI スレッドの同期コンテキストを避けてスレッドプールで書き切る
-        // (プロセス終了前に完了させるため短いタイムアウト付きで待つ)
-        AppState state = CaptureAppState();
-        Task.Run(() => _appStateStore.WriteAsync(state)).Wait(TimeSpan.FromSeconds(2));
+        // 終了時の最終保存。fault は AppStateSaver 内で捕捉され、タイムアウトも false として
+        // 明示的に扱われる(UI スレッドへ throw しない)。失敗理由はトレースログへ伝播する
+        _appStateSaver.TryFlush(CaptureAppState(), TimeSpan.FromSeconds(2));
     }
 
-    private async Task SaveAppStateAsync()
-    {
-        try
-        {
-            await _appStateStore.WriteAsync(CaptureAppState());
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // アプリ状態の保存失敗は機能を止めない(次回の変更で再試行される)
-        }
-    }
+    private Task SaveAppStateAsync() => _appStateSaver.TrySaveAsync(CaptureAppState());
 
     private AppState CaptureAppState()
     {
@@ -330,25 +327,13 @@ public sealed partial class MainWindow : Window
             State: Microsoft.UI.Windowing.OverlappedPresenterState.Maximized,
         };
 
-        // 一度も移動していない場合は現在の通常表示ウィンドウをそのまま記録する
-        if (_normalWindowBounds is null && !isMaximized)
-        {
-            _normalWindowBounds = new Windows.Graphics.RectInt32(
-                AppWindow.Position.X,
-                AppWindow.Position.Y,
-                AppWindow.Size.Width,
-                AppWindow.Size.Height);
-        }
-
         return new AppState
         {
             OutputDirectory = StageViewModel.OutputDirectory,
             LastTargetDate = StageViewModel.TargetDate,
             SelectedTemplateId = StageViewModel.SelectedTemplate?.Id,
             SidebarWidth = SidebarColumn.ActualWidth,
-            Window = _normalWindowBounds is { } bounds
-                ? new WindowPlacement(bounds.X, bounds.Y, bounds.Width, bounds.Height, isMaximized)
-                : null,
+            Window = _windowPlacementTracker.Capture(isMaximized),
         };
     }
 
