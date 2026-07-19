@@ -16,14 +16,22 @@
             <!-- ビューポートと同サイズに保ち、ZoomFactor=1 が「全体表示」になるようにする -->
             <Grid x:Name="ContentHost">
                 <Image
+                    x:Name="DiscImage"
                     Margin="12"
                     RenderTransformOrigin="0.5,0.5"
+                    SizeChanged="OnDiscImageSizeChanged"
                     Source="{x:Bind Source, Mode=OneWay}"
                     Stretch="Uniform">
                     <Image.RenderTransform>
                         <RotateTransform Angle="{x:Bind Angle, Mode=OneWay}" />
                     </Image.RenderTransform>
                 </Image>
+                <!-- 文字入れレイヤー(FR-18): 画像の回転と独立し、ズーム・スクロールには追従する -->
+                <Canvas
+                    x:Name="TextOverlayCanvas"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsHitTestVisible="False" />
             </Grid>
         </ScrollViewer>
         <!-- 十字ガイド: 画像の回転・ズームと独立した固定レイヤー(FR-06) -->
