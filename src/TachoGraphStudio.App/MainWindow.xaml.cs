@@ -124,7 +124,9 @@ public sealed partial class MainWindow : Window
         await RefreshSupabaseConnectionAsync(promptIfUnset: true);
     }
 
-    // 処理対象日の一括指定(FR-14)。クリア(null)は無視して直前の日付を維持する
+    // 処理対象日の一括指定(FR-14)。クリア(null)時は表示を直前の日付へ戻し、
+    // 表示値と TargetDate が乖離しないようにする(戻す代入で再度 DateChanged が発火するが、
+    // 同値のため TargetDate の変更通知は起きない)
     private void OnTargetDatePickerDateChanged(
         CalendarDatePicker sender,
         CalendarDatePickerDateChangedEventArgs args)
@@ -132,7 +134,10 @@ public sealed partial class MainWindow : Window
         if (args.NewDate is { } date)
         {
             StageViewModel.TargetDate = DateOnly.FromDateTime(date.LocalDateTime);
+            return;
         }
+
+        sender.Date = new DateTimeOffset(StageViewModel.TargetDate.ToDateTime(TimeOnly.MinValue));
     }
 
     private async void OnOpenSettingsButtonClick(object sender, RoutedEventArgs e)
