@@ -21,7 +21,7 @@ public sealed partial class DiscMetadata : ObservableObject
     [ObservableProperty]
     public partial string VehicleType { get; set; } = "";
 
-    // 手書きのため自動文字入れをスキップ(FR-17)。ファイル名の運転者部の「手書き」化は #14
+    // 手書きのため自動文字入れをスキップ(FR-17)。円盤ごとに個別設定できる
     [ObservableProperty]
     public partial bool SkipHandwritten { get; set; }
 

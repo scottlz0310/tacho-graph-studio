@@ -57,7 +57,7 @@ public sealed partial class StageViewModel : ObservableObject
     [ObservableProperty]
     public partial DateOnly TargetDate { get; set; }
 
-    // 手書きスキップ(FR-17)。トップバーで一括指定し全円盤に適用する(アーキテクチャ §4)
+    // 手書きスキップ(FR-17)。トップバーの一括設定兼、新規取込時の既定値
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial bool SkipHandwritten { get; set; }
@@ -111,7 +111,7 @@ public sealed partial class StageViewModel : ObservableObject
     public bool CanSave => SelectedDisc is not null
         && OutputDirectory is not null
         && !IsSaving
-        && (SkipHandwritten || SelectedTemplate is not null);
+        && (SelectedDisc.Metadata.SkipHandwritten || SelectedTemplate is not null);
 
     // 保存前のファイル名プレビュー(FR-20)。メタデータの編集にリアルタイム追従する
     public string SaveTargetLabel
@@ -387,6 +387,10 @@ public sealed partial class StageViewModel : ObservableObject
     private void OnSelectedDiscMetadataPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(SaveTargetLabel));
+        if (e.PropertyName == nameof(DiscMetadata.SkipHandwritten))
+        {
+            OnPropertyChanged(nameof(CanSave));
+        }
     }
 
     partial void OnTargetDateChanged(DateOnly value)

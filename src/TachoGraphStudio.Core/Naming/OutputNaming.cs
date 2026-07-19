@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace TachoGraphStudio.Core.Naming;
 
 // 出力ファイル名の生成(FR-17, FR-20): YYYYMMDD_登録番号_運転者.png。
-// 手書きスキップ時は運転者部を「手書き」とする(モック・GIMP 版の命名規則を継承)
+// 手書きスキップ時は運転者名を残し、末尾へ「手書き」を付与する
 public static partial class OutputNaming
 {
     public static string CreateFileName(
@@ -17,9 +17,9 @@ public static partial class OutputNaming
         ArgumentNullException.ThrowIfNull(driverName);
 
         string datePart = DateSeparatorRegex().Replace(printDate.Trim(), "");
-        string driverPart = skipHandwritten ? "手書き" : driverName;
+        string baseName = $"{Sanitize(datePart)}_{Sanitize(registrationNumber)}_{Sanitize(driverName)}";
 
-        return $"{Sanitize(datePart)}_{Sanitize(registrationNumber)}_{Sanitize(driverPart)}.png";
+        return skipHandwritten ? $"{baseName}_手書き.png" : $"{baseName}.png";
     }
 
     // 印字日付(手修正可能な文字列)から区切り文字を除いて日付部を作る。
