@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
 using TachoGraphStudio.Core.Imaging;
+using TachoGraphStudio.Core.Naming;
 using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Templates;
 
@@ -18,7 +20,23 @@ public sealed partial class StageViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedDisc))]
+    [NotifyPropertyChangedFor(nameof(SaveTargetLabel))]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial DiscWorkItem? SelectedDisc { get; set; }
+
+    // 出力先ディレクトリ(FR-19)。永続化は #15、当面はセッション内で保持する
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveTargetLabel))]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
+    public partial string? OutputDirectory { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
+    public partial bool IsSaving { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSaveError))]
+    public partial string? SaveError { get; set; }
 
     [ObservableProperty]
     public partial bool IsPreviewFullscreen { get; set; }
@@ -41,10 +59,12 @@ public sealed partial class StageViewModel : ObservableObject
 
     // 手書きスキップ(FR-17)。トップバーで一括指定し全円盤に適用する(アーキテクチャ §4)
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial bool SkipHandwritten { get; set; }
 
     // チャート紙様式の選択(FR-16)。文字入れ位置はテンプレート定義に従う
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial StoredTemplate? SelectedTemplate { get; set; }
 
     [ObservableProperty]
@@ -78,6 +98,37 @@ public sealed partial class StageViewModel : ObservableObject
     public bool HasImportError => ImportError is not null;
 
     public bool HasSelectedDisc => SelectedDisc is not null;
+
+    public bool HasSaveError => SaveError is not null;
+
+    // 文字なし保存は手書きスキップ時のみ許可する(FR-17)。様式未選択のまま
+    // 文字なし PNG を成功扱いで保存しない
+    public bool CanSave => SelectedDisc is not null
+        && OutputDirectory is not null
+        && !IsSaving
+        && (SkipHandwritten || SelectedTemplate is not null);
+
+    // 保存前のファイル名プレビュー(FR-20)。メタデータの編集にリアルタイム追従する
+    public string SaveTargetLabel
+    {
+        get
+        {
+            if (SelectedDisc is not { Metadata: { } metadata })
+            {
+                return "";
+            }
+
+            string fileName = OutputNaming.CreateFileName(
+                metadata.PrintDate,
+                metadata.RegistrationNumber,
+                metadata.DriverName,
+                metadata.SkipHandwritten);
+
+            return OutputDirectory is null
+                ? $"保存先: (未選択) {fileName}"
+                : $"保存先: {Path.Combine(OutputDirectory, fileName)}";
+        }
+    }
 
     public void ResetRotation()
     {
@@ -135,6 +186,123 @@ public sealed partial class StageViewModel : ObservableObject
         {
             TemplateWarning = $"テンプレートの読み込みに失敗しました: {exception.Message}";
         }
+    }
+
+    // 確定保存して次へ(FR-19〜21): 回転・文字入れを本合成した透過 PNG を保存し、
+    // 円盤を処理済みにして次の未処理円盤へ自動遷移する。同名ファイルは上書きする
+    public async Task<bool> SaveAndAdvanceAsync(CancellationToken cancellationToken = default)
+    {
+        if (SelectedDisc is not { } item || OutputDirectory is not { } outputDirectory || IsSaving)
+        {
+            return false;
+        }
+
+        // 保存中の編集が結果に混ざらないよう、合成入力とファイル名は最初の await より前に
+        // 同一スナップショットへ固定する
+        DiscMetadata metadata = item.Metadata;
+        bool skipHandwritten = metadata.SkipHandwritten;
+        ChartTemplate? template = skipHandwritten ? null : SelectedTemplate?.Template;
+
+        // 文字なし合成は手書きスキップ時のみ許可する(FR-17)。様式未選択の保存は拒否
+        if (!skipHandwritten && template is null)
+        {
+            return false;
+        }
+
+        ChartTextValues? values = skipHandwritten ? null : metadata.ToTextValues();
+        string fileName = OutputNaming.CreateFileName(
+            metadata.PrintDate,
+            metadata.RegistrationNumber,
+            metadata.DriverName,
+            skipHandwritten);
+        double angle = item.RotationAngle;
+        ProcessedDisc disc = item.Disc;
+
+        IsSaving = true;
+        SaveError = null;
+        try
+        {
+            byte[] png = await Task.Run(
+                () => DiscComposer.ComposePng(disc.Bgra, disc.Width, disc.Height, angle, template, values),
+                cancellationToken);
+
+            Directory.CreateDirectory(outputDirectory);
+            await ReplaceFileAsync(Path.Combine(outputDirectory, fileName), png, cancellationToken);
+
+            item.Status = DiscStatus.Done;
+            AdvanceToNextDisc(item);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            SaveError = $"保存に失敗しました: {exception.Message}";
+            return false;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    // 同一ディレクトリの一時ファイルへ書き切ってから置換し、途中失敗で既存の成果物を
+    // 破損させない(AtomicJsonFile と同じ一時ファイル + Move パターン)
+    private static async Task ReplaceFileAsync(
+        string filePath,
+        byte[] content,
+        CancellationToken cancellationToken)
+    {
+        string temporaryFilePath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllBytesAsync(temporaryFilePath, content, cancellationToken);
+            File.Move(temporaryFilePath, filePath, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(temporaryFilePath);
+            }
+            catch (IOException)
+            {
+                // 元例外を優先する。孤児 .tmp は次回保存の障害にならない
+            }
+
+            throw;
+        }
+    }
+
+    // 現在の円盤より後ろの最初の未処理へ、なければ先頭側の未処理へ遷移する。
+    // 未処理が残っていなければ現在位置に留まる(FR-21)
+    private void AdvanceToNextDisc(DiscWorkItem current)
+    {
+        int index = Discs.IndexOf(current);
+        DiscWorkItem? next = Discs.Skip(index + 1)
+            .Concat(Discs.Take(index + 1))
+            .FirstOrDefault(disc => disc.Status == DiscStatus.Pending);
+        if (next is not null)
+        {
+            SelectedDisc = next;
+        }
+    }
+
+    partial void OnSelectedDiscChanged(DiscWorkItem? oldValue, DiscWorkItem? newValue)
+    {
+        // ファイル名プレビューがメタデータの編集に追従するよう購読を張り替える
+        if (oldValue is not null)
+        {
+            oldValue.Metadata.PropertyChanged -= OnSelectedDiscMetadataPropertyChanged;
+        }
+
+        if (newValue is not null)
+        {
+            newValue.Metadata.PropertyChanged += OnSelectedDiscMetadataPropertyChanged;
+        }
+    }
+
+    private void OnSelectedDiscMetadataPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(SaveTargetLabel));
     }
 
     partial void OnTargetDateChanged(DateOnly value)
