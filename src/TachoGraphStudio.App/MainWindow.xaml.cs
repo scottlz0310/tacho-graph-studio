@@ -111,6 +111,28 @@ public sealed partial class MainWindow : Window
         StageViewModel.ResetRotation();
     }
 
+    private async void OnSelectOutputDirectoryButtonClick(object sender, RoutedEventArgs e)
+    {
+        FolderPicker picker = new()
+        {
+            SuggestedStartLocation = PickerLocationId.PicturesLibrary,
+        };
+        picker.FileTypeFilter.Add("*");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+        StorageFolder? folder = await picker.PickSingleFolderAsync();
+        if (folder is not null)
+        {
+            // 永続化(前回出力先の復元)は #15
+            StageViewModel.OutputDirectory = folder.Path;
+        }
+    }
+
+    private async void OnSaveAndAdvanceButtonClick(object sender, RoutedEventArgs e)
+    {
+        await StageViewModel.SaveAndAdvanceAsync();
+    }
+
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {

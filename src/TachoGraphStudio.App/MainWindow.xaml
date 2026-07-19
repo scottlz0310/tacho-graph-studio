@@ -222,7 +222,7 @@
             <!-- ステージ（FR-04, FR-06〜08: サムネイルナビ＋プレビュー＋回転補正） -->
             <Grid
                 Grid.Column="2"
-                RowDefinitions="Auto,Auto,Auto,*,Auto,Auto"
+                RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto"
                 RowSpacing="12">
                 <StackPanel
                     Grid.Row="0"
@@ -361,6 +361,40 @@
                         IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
                         Text="{x:Bind StageViewModel.SelectedDisc.Metadata.DriverName, Mode=TwoWay}" />
                 </Grid>
+                <!-- 保存アクションバー(FR-19〜21): ファイル名プレビュー・確定保存して次へ -->
+                <StackPanel Grid.Row="6" Spacing="8">
+                    <InfoBar
+                        IsClosable="True"
+                        IsOpen="{x:Bind StageViewModel.HasSaveError, Mode=OneWay}"
+                        Message="{x:Bind StageViewModel.SaveError, Mode=OneWay}"
+                        Severity="Error" />
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+                        <TextBlock
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind StageViewModel.SaveTargetLabel, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis" />
+                        <Button
+                            Grid.Column="1"
+                            Click="OnSelectOutputDirectoryButtonClick"
+                            Content="出力先..." />
+                        <ProgressRing
+                            Grid.Column="2"
+                            Width="24"
+                            Height="24"
+                            VerticalAlignment="Center"
+                            IsActive="{x:Bind StageViewModel.IsSaving, Mode=OneWay}"
+                            Visibility="{x:Bind StageViewModel.IsSaving, Mode=OneWay}" />
+                        <Button
+                            Grid.Column="3"
+                            Click="OnSaveAndAdvanceButtonClick"
+                            Content="確定保存して次へ"
+                            IsEnabled="{x:Bind StageViewModel.CanSave, Mode=OneWay}"
+                            Style="{StaticResource AccentButtonStyle}" />
+                    </Grid>
+                </StackPanel>
             </Grid>
         </Grid>
         <!-- 全画面拡大プレビュー（FR-08） -->
