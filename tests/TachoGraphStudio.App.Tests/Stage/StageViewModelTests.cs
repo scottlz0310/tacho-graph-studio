@@ -348,7 +348,7 @@ public sealed class StageViewModelTests
         IndexInSheet: indexInSheet,
         Width: 2,
         Height: 2,
-        PremultipliedBgra: new byte[16],
+        Bgra: new byte[16],
         ThumbnailWidth: 1,
         ThumbnailHeight: 1,
         ThumbnailPremultipliedBgra: new byte[4],

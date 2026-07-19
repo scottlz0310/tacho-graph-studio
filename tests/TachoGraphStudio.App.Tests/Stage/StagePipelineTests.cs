@@ -38,7 +38,7 @@ public sealed class StagePipelineTests : IDisposable
             ProcessedDisc disc = discs[index];
             Assert.Equal(path, disc.SourcePath);
             Assert.Equal(index, disc.IndexInSheet);
-            Assert.Equal(disc.Width * disc.Height * 4, disc.PremultipliedBgra.Length);
+            Assert.Equal(disc.Width * disc.Height * 4, disc.Bgra.Length);
             Assert.Equal(disc.ThumbnailWidth * disc.ThumbnailHeight * 4, disc.ThumbnailPremultipliedBgra.Length);
             Assert.InRange(Math.Max(disc.ThumbnailWidth, disc.ThumbnailHeight), 1, 160);
             Assert.InRange(disc.EllipseCenterX, 0, disc.Width);
@@ -47,7 +47,7 @@ public sealed class StagePipelineTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessAsync_OutputIsPremultipliedBgra()
+    public async Task ProcessAsync_OutputIsStraightBgraWithPremultipliedThumbnail()
     {
         string path = WriteJpegSheet("sheet.jpg", discCount: 1);
         StagePipeline pipeline = new(
@@ -58,14 +58,18 @@ public sealed class StagePipelineTests : IDisposable
 
         // 楕円中心は不透明(alpha=255)で BGR は元色(225 前後)のまま
         int centerOffset = (((int)disc.EllipseCenterY * disc.Width) + (int)disc.EllipseCenterX) * 4;
-        Assert.Equal(255, disc.PremultipliedBgra[centerOffset + 3]);
-        Assert.InRange(disc.PremultipliedBgra[centerOffset], 200, 255);
+        Assert.Equal(255, disc.Bgra[centerOffset + 3]);
+        Assert.InRange(disc.Bgra[centerOffset], 200, 255);
 
-        // 左上隅は楕円の外。premultiplied のため alpha=0 なら BGR も 0
-        Assert.Equal(0, disc.PremultipliedBgra[3]);
-        Assert.Equal(0, disc.PremultipliedBgra[0]);
-        Assert.Equal(0, disc.PremultipliedBgra[1]);
-        Assert.Equal(0, disc.PremultipliedBgra[2]);
+        // 左上隅は楕円の外(alpha=0)。フル解像度はストレートアルファで本合成(FR-19)の入力になる
+        Assert.Equal(0, disc.Bgra[3]);
+
+        // サムネイルは premultiplied(表示専用)。中心は不透明なので BGR が残る
+        int thumbnailCenterOffset =
+            (((disc.ThumbnailHeight / 2) * disc.ThumbnailWidth) + (disc.ThumbnailWidth / 2)) * 4;
+        Assert.Equal(255, disc.ThumbnailPremultipliedBgra[thumbnailCenterOffset + 3]);
+        Assert.Equal(0, disc.ThumbnailPremultipliedBgra[3]);
+        Assert.Equal(0, disc.ThumbnailPremultipliedBgra[0]);
     }
 
     [Fact]
