@@ -55,6 +55,21 @@ internal sealed class FakeTemplateStore : ITemplateStore
         return Task.CompletedTask;
     }
 
+    // 設定すると ExportAllAsync がこの結果を返す(未設定時は全件成功)
+    public TemplateExportResult? NextExportResult { get; set; }
+
+    public List<string> ExportedDirectories { get; } = [];
+
+    public Task<TemplateExportResult> ExportAllAsync(
+        string destinationDirectoryPath,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfConfigured();
+        ExportedDirectories.Add(destinationDirectoryPath);
+        return Task.FromResult(
+            NextExportResult ?? new TemplateExportResult(_templates.Count, []));
+    }
+
     private string GenerateId(string name)
     {
         string candidate = name;

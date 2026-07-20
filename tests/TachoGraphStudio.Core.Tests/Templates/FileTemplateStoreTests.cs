@@ -198,6 +198,84 @@ public sealed class FileTemplateStoreTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_temporaryDirectory, "Yazaki45.json")));
     }
 
+    [Fact]
+    public async Task ExportAllAsync_MissingSourceDirectoryExportsNothing()
+    {
+        FileTemplateStore store = new(_temporaryDirectory);
+        string destination = Path.Combine(_temporaryDirectory, "..", $"export-{Guid.NewGuid():N}");
+
+        TemplateExportResult result = await store.ExportAllAsync(destination);
+
+        Assert.Equal(0, result.ExportedCount);
+        Assert.Empty(result.Failures);
+    }
+
+    [Fact]
+    public async Task ExportAllAsync_WritesTemplatesPreservingFileContent()
+    {
+        FileTemplateStore store = new(_temporaryDirectory);
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45"));
+        await store.SaveAsync(id: null, CreateTemplate("Task-Meter"));
+        string destination = Path.Combine(_temporaryDirectory, "export");
+
+        TemplateExportResult result = await store.ExportAllAsync(destination);
+
+        Assert.Equal(2, result.ExportedCount);
+        Assert.Empty(result.Failures);
+        foreach (string id in (string[])["Yazaki45", "Task-Meter"])
+        {
+            string sourcePath = Path.Combine(_temporaryDirectory, $"{id}.json");
+            string exportedPath = Path.Combine(destination, $"{id}.json");
+            Assert.True(File.Exists(exportedPath));
+            Assert.Equal(await File.ReadAllTextAsync(sourcePath), await File.ReadAllTextAsync(exportedPath));
+        }
+    }
+
+    [Fact]
+    public async Task ExportAllAsync_BrokenTemplateIsReportedAndOthersAreExported()
+    {
+        FileTemplateStore store = new(_temporaryDirectory);
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45"));
+        await File.WriteAllTextAsync(Path.Combine(_temporaryDirectory, "broken.json"), "{ not json");
+        string destination = Path.Combine(_temporaryDirectory, "export");
+
+        TemplateExportResult result = await store.ExportAllAsync(destination);
+
+        Assert.Equal(1, result.ExportedCount);
+        TemplateLoadFailure failure = Assert.Single(result.Failures);
+        Assert.Equal("broken.json", failure.FileName);
+        Assert.True(File.Exists(Path.Combine(destination, "Yazaki45.json")));
+        Assert.False(File.Exists(Path.Combine(destination, "broken.json")));
+    }
+
+    [Fact]
+    public async Task ExportAllAsync_OverwritesExistingFilesInDestination()
+    {
+        FileTemplateStore store = new(_temporaryDirectory);
+        await store.SaveAsync(id: null, CreateTemplate("Yazaki45"));
+        string destination = Path.Combine(_temporaryDirectory, "export");
+        Directory.CreateDirectory(destination);
+        string exportedPath = Path.Combine(destination, "Yazaki45.json");
+        await File.WriteAllTextAsync(exportedPath, "古いバックアップ");
+
+        TemplateExportResult result = await store.ExportAllAsync(destination);
+
+        Assert.Equal(1, result.ExportedCount);
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(_temporaryDirectory, "Yazaki45.json")),
+            await File.ReadAllTextAsync(exportedPath));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ExportAllAsync_BlankDestinationThrows(string destination)
+    {
+        FileTemplateStore store = new(_temporaryDirectory);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.ExportAllAsync(destination));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

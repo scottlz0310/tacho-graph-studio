@@ -172,36 +172,126 @@ public sealed class TemplateEditorViewModelTests
     }
 
     [Fact]
-    public async Task ImportAsync_SavesAndSelectsImportedTemplate()
+    public async Task ImportAllAsync_SavesAllAndSelectsLastImportedTemplate()
     {
         FakeTemplateStore store = new();
         TemplateEditorViewModel editor = new(store);
         await editor.LoadAsync();
-        string json = ChartTemplateSerializer.Serialize(CreateTemplate("Yazaki45"));
+        TemplateImportFile[] files =
+        [
+            new("Yazaki45.json", ChartTemplateSerializer.Serialize(CreateTemplate("Yazaki45"))),
+            new("Task-Meter.json", ChartTemplateSerializer.Serialize(CreateTemplate("Task-Meter"))),
+        ];
 
-        bool imported = await editor.ImportAsync("Yazaki45.json", json);
+        int importedCount = await editor.ImportAllAsync(files);
 
-        Assert.True(imported);
-        TemplateItemViewModel item = Assert.Single(editor.Templates);
-        Assert.Equal("Yazaki45", item.Id);
-        Assert.False(item.IsDirty);
-        Assert.Same(item, editor.SelectedTemplate);
+        Assert.Equal(2, importedCount);
+        Assert.Equal(2, editor.Templates.Count);
+        Assert.All(editor.Templates, item => Assert.False(item.IsDirty));
+        Assert.Equal("Task-Meter", editor.SelectedTemplate?.Id);
+        Assert.Null(editor.ErrorMessage);
+        Assert.Contains("2 件", editor.StatusMessage, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("{ not json")]
     [InlineData("null")]
-    public async Task ImportAsync_InvalidJsonSetsErrorMessage(string json)
+    [InlineData(null)]
+    public async Task ImportAllAsync_InvalidOrUnreadableFileSetsErrorMessage(string? json)
     {
         TemplateEditorViewModel editor = new(new FakeTemplateStore());
         await editor.LoadAsync();
 
-        bool imported = await editor.ImportAsync("broken.json", json);
+        int importedCount = await editor.ImportAllAsync([new TemplateImportFile("broken.json", json)]);
 
-        Assert.False(imported);
+        Assert.Equal(0, importedCount);
         Assert.True(editor.HasError);
         Assert.Contains("broken.json", editor.ErrorMessage, StringComparison.Ordinal);
+        Assert.Null(editor.StatusMessage);
         Assert.Empty(editor.Templates);
+    }
+
+    [Fact]
+    public async Task ImportAllAsync_PartialFailureImportsValidFilesAndReportsFailures()
+    {
+        FakeTemplateStore store = new();
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+        TemplateImportFile[] files =
+        [
+            new("broken.json", "{ not json"),
+            new("Yazaki45.json", ChartTemplateSerializer.Serialize(CreateTemplate("Yazaki45"))),
+        ];
+
+        int importedCount = await editor.ImportAllAsync(files);
+
+        Assert.Equal(1, importedCount);
+        TemplateItemViewModel item = Assert.Single(editor.Templates);
+        Assert.Equal("Yazaki45", item.Id);
+        Assert.Same(item, editor.SelectedTemplate);
+        Assert.Contains("broken.json", editor.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("1 件", editor.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExportAllAsync_ReportsExportedCountAndClearsError()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync("Yazaki45", CreateTemplate("Yazaki45"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+
+        await editor.ExportAllAsync(@"C:\backup\templates");
+
+        Assert.Equal([@"C:\backup\templates"], store.ExportedDirectories);
+        Assert.Null(editor.ErrorMessage);
+        Assert.Contains("1 件", editor.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExportAllAsync_UnsavedChangesAreNotedInStatusMessage()
+    {
+        FakeTemplateStore store = new();
+        await store.SaveAsync("Yazaki45", CreateTemplate("Yazaki45"));
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+        editor.Templates[0].Name = "changed";
+        Assert.True(editor.HasUnsavedChanges);
+
+        await editor.ExportAllAsync(@"C:\backup\templates");
+
+        Assert.Contains("未保存の変更は含まれていません", editor.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExportAllAsync_StoreFailuresAreReportedAsError()
+    {
+        FakeTemplateStore store = new()
+        {
+            NextExportResult = new TemplateExportResult(1, [new TemplateLoadFailure("broken.json", "壊れています")]),
+        };
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+
+        await editor.ExportAllAsync(@"C:\backup\templates");
+
+        Assert.Contains("broken.json", editor.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("1 件", editor.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExportAllAsync_StoreExceptionSetsErrorMessage()
+    {
+        FakeTemplateStore store = new();
+        TemplateEditorViewModel editor = new(store);
+        await editor.LoadAsync();
+        store.NextException = new IOException("ディスクエラー");
+
+        await editor.ExportAllAsync(@"C:\backup\templates");
+
+        Assert.True(editor.HasError);
+        Assert.Contains("ディスクエラー", editor.ErrorMessage, StringComparison.Ordinal);
+        Assert.Null(editor.StatusMessage);
     }
 
     [Theory]

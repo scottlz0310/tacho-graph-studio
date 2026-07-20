@@ -127,6 +127,63 @@ public sealed class FileTemplateStore : ITemplateStore
         }
     }
 
+    public async Task<TemplateExportResult> ExportAllAsync(
+        string destinationDirectoryPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectoryPath);
+
+        string destinationPath = Path.GetFullPath(destinationDirectoryPath);
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!Directory.Exists(_directoryPath))
+            {
+                return new TemplateExportResult(0, []);
+            }
+
+            Directory.CreateDirectory(destinationPath);
+
+            int exportedCount = 0;
+            List<TemplateLoadFailure> failures = [];
+
+            IEnumerable<string> filePaths = Directory
+                .EnumerateFiles(_directoryPath, $"*{FileExtension}")
+                .Order(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string filePath in filePaths)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string fileName = Path.GetFileName(filePath);
+                try
+                {
+                    // GIMP 互換フォーマットを保つため変換はせず、検証のみ行って
+                    // 元のファイル内容をそのまま書き出す
+                    string json = await File.ReadAllTextAsync(filePath, cancellationToken);
+                    ChartTemplateSerializer.Deserialize(json);
+                    await File.WriteAllTextAsync(
+                        Path.Combine(destinationPath, fileName),
+                        json,
+                        cancellationToken);
+                    exportedCount++;
+                }
+                catch (Exception exception)
+                    when (exception is TemplateFormatException or IOException or UnauthorizedAccessException)
+                {
+                    failures.Add(new TemplateLoadFailure(fileName, exception.Message));
+                }
+            }
+
+            return new TemplateExportResult(exportedCount, failures);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     private string GetFilePath(string id) => Path.Combine(_directoryPath, id + FileExtension);
 
     // ID はファイル名(拡張子なし)。外部から渡される値がディレクトリ外を指せないことを保証する

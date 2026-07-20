@@ -182,24 +182,53 @@ public sealed partial class TemplateEditorOverlay : UserControl
         picker.FileTypeFilter.Add(".json");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(HostWindow));
 
-        StorageFile? file = await picker.PickSingleFileAsync();
-        if (file is null)
+        IReadOnlyList<StorageFile> files = await picker.PickMultipleFilesAsync();
+        if (files.Count == 0)
         {
             return;
         }
 
-        string json;
-        try
+        List<TemplateImportFile> importFiles = [];
+        foreach (StorageFile file in files)
         {
-            json = await FileIO.ReadTextAsync(file);
+            string? json;
+            try
+            {
+                json = await FileIO.ReadTextAsync(file);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // 読み込み失敗は Json=null で渡し、ViewModel 側で取り込み失敗として集約する
+                json = null;
+            }
+
+            importFiles.Add(new TemplateImportFile(file.Name, json));
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+
+        await ViewModel.ImportAllAsync(importFiles);
+    }
+
+    private async void OnExportButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is null || HostWindow is null)
         {
-            ViewModel.ErrorMessage = $"{file.Name} を読み込めません: {exception.Message}";
             return;
         }
 
-        await ViewModel.ImportAsync(file.Name, json);
+        FolderPicker picker = new()
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+        };
+        picker.FileTypeFilter.Add("*");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(HostWindow));
+
+        StorageFolder? folder = await picker.PickSingleFolderAsync();
+        if (folder is null)
+        {
+            return;
+        }
+
+        await ViewModel.ExportAllAsync(folder.Path);
     }
 
     private void OnAddFieldButtonClick(object sender, RoutedEventArgs e)
