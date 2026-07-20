@@ -21,7 +21,7 @@
                 <TextBlock
                     FontStyle="Italic"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="テンプレートを編集..." />
+                    Text="テンプレート登録・編集" />
             </DataTemplate>
             <stage:TemplateSelectionItemTemplateSelector
                 x:Key="TemplateSelectionItemTemplateSelector"

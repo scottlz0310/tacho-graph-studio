@@ -73,7 +73,7 @@ public sealed partial class StageViewModel : ObservableObject
     public partial string? TemplateWarning { get; set; }
 
     // トップバーのテンプレート選択 ComboBox 用。実テンプレートに加え、末尾に
-    // TemplateEditEntry.Instance(「テンプレートを編集...」導線)を含む(#43)
+    // TemplateEditEntry.Instance(「テンプレート登録・編集」導線)を含む(#43)
     public ObservableCollection<object> TemplateSelectionItems { get; } = [];
 
     public StageViewModel(

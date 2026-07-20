@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- App: チャート紙様式 `ComboBox` の選択肢が `ToString()` フォールバックで冗長表示されていた問題を修正。`TemplateSelectionItemTemplateSelector` に 2 引数版 `SelectTemplateCore` を override し、テンプレート名のみを表示する。あわせて編集導線の文言を「テンプレート登録・編集」へ変更（#59）
+
 ## [0.1.1] - 2026-07-19
 
 ステージ UI を実運用に合わせて再編し、円盤ごとのテンプレート・手書き設定、テンプレートプレビュー、ズーム・パン追従、外周ドラッグ回転を改善したパッチリリース。
