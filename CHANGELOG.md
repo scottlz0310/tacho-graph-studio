@@ -8,6 +8,8 @@
 
 ### Added
 
+- App/Core: テンプレートのバックアップ手段を追加（#60）。テンプレート編集画面に「フォルダへ一括エクスポート」を追加し、保存済みテンプレートを選択フォルダへ GIMP 互換 JSON のまま `{id}.json` として書き出す（同名は上書き、壊れたファイルはスキップして報告）。あわせて既存の「ファイルから追加」を複数ファイル選択に対応させ、バックアップからの一括復元を可能にした
+
 - App/Core: 名簿サイドバーに業者フィルターを追加（#61）。Supabase の `vendors` / `vendor_ctrl_num_ranges`（`purpose='view'`、共通ゾーン＋自社範囲）を anon key で読み取り専用参照し、選択業者の ctrl_num 範囲で名簿を絞り込む。業者定義はアプリ側にハードコードせずテーブル参照とし、名簿と同様のオフラインキャッシュ（`CachedVendorClient` / `JsonVendorCache`）と `RosterFilterSettings.VendorCode` による選択の永続化を備える。取得失敗時は警告表示のうえ業者フィルターなしで続行する
 
 - CI: テスト実行時にコードカバレッジ（Cobertura）を収集し Codecov へアップロードするステップと、カバレッジ低下を informational として扱う `codecov.yml` を追加

@@ -13,6 +13,13 @@ public interface ITemplateStore
 
     // 存在しない ID の削除は何もしない(冪等)
     Task DeleteAsync(string id, CancellationToken cancellationToken = default);
+
+    // 保存済みの全テンプレートを指定ディレクトリへ {id}.json として書き出す(#60)。
+    // 同名ファイルは上書きする(バックアップの更新を想定)。壊れたテンプレートは
+    // スキップして Failures で報告し、残りの書き出しは継続する
+    Task<TemplateExportResult> ExportAllAsync(
+        string destinationDirectoryPath,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record StoredTemplate(string Id, ChartTemplate Template);
@@ -23,3 +30,7 @@ public sealed record TemplateStoreListResult(
     IReadOnlyList<TemplateLoadFailure> Failures);
 
 public sealed record TemplateLoadFailure(string FileName, string Message);
+
+public sealed record TemplateExportResult(
+    int ExportedCount,
+    IReadOnlyList<TemplateLoadFailure> Failures);

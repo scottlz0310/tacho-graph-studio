@@ -45,6 +45,11 @@
                 IsOpen="{x:Bind ViewModel.HasLoadWarning, Mode=OneWay}"
                 Message="{x:Bind ViewModel.LoadWarningMessage, Mode=OneWay}"
                 Severity="Warning" />
+            <InfoBar
+                IsClosable="True"
+                IsOpen="{x:Bind ViewModel.HasStatus, Mode=OneWay}"
+                Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                Severity="Success" />
         </StackPanel>
         <Grid
             Grid.Row="2"
@@ -73,10 +78,15 @@
                             Content="削除"
                             IsEnabled="{x:Bind ViewModel.HasSelectedTemplate, Mode=OneWay}" />
                     </StackPanel>
-                    <Button
-                        Grid.Row="1"
-                        Click="OnImportButtonClick"
-                        Content="ファイルから追加（旧テンプレート対応）" />
+                    <StackPanel Grid.Row="1" Spacing="8">
+                        <Button
+                            Click="OnImportButtonClick"
+                            Content="ファイルから追加（旧テンプレート対応）" />
+                        <!-- バックアップ・移行用(#60)。保存済みテンプレートを選択フォルダへ書き出す -->
+                        <Button
+                            Click="OnExportButtonClick"
+                            Content="フォルダへ一括エクスポート" />
+                    </StackPanel>
                     <ListView
                         Grid.Row="2"
                         ItemsSource="{x:Bind ViewModel.Templates, Mode=OneWay}"

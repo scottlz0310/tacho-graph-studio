@@ -50,6 +50,11 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasLoadWarning))]
     public partial string? LoadWarningMessage { get; set; }
 
+    // エクスポート・インポート完了の成功通知(#60)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatus))]
+    public partial string? StatusMessage { get; set; }
+
     public TemplateEditorViewModel(ITemplateStore store)
     {
         ArgumentNullException.ThrowIfNull(store);
@@ -67,6 +72,8 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
     public bool HasError => ErrorMessage is not null;
 
     public bool HasLoadWarning => LoadWarningMessage is not null;
+
+    public bool HasStatus => StatusMessage is not null;
 
     public bool HasUnsavedChanges => Templates.Any(template => template.IsDirty);
 
@@ -212,34 +219,86 @@ public sealed partial class TemplateEditorViewModel : ObservableObject
     }
 
     // 旧 GIMP 版テンプレート JSON の取り込み(フォーマット互換、FR-25)。取り込みと同時に保存する
-    public async Task<bool> ImportAsync(
-        string fileName,
-        string json,
+    // 複数ファイルの一括取り込み(#60)。Json が null のファイルは view 層で読み込みに
+    // 失敗したものとして失敗数に含める。失敗があっても残りの取り込みは継続する
+    public async Task<int> ImportAllAsync(
+        IReadOnlyList<TemplateImportFile> files,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(fileName);
-        ArgumentNullException.ThrowIfNull(json);
+        ArgumentNullException.ThrowIfNull(files);
 
+        int importedCount = 0;
+        List<string> failedFileNames = [];
+        TemplateItemViewModel? lastImported = null;
+
+        foreach (TemplateImportFile file in files)
+        {
+            if (file.Json is null)
+            {
+                failedFileNames.Add(file.FileName);
+                continue;
+            }
+
+            try
+            {
+                ChartTemplate template = ChartTemplateSerializer.Deserialize(file.Json);
+                StoredTemplate stored = await _store.SaveAsync(id: null, template, cancellationToken);
+
+                TemplateItemViewModel item = new(stored.Id, stored.Template);
+                Templates.Add(item);
+                lastImported = item;
+                importedCount++;
+            }
+            catch (Exception exception)
+                when (exception is TemplateFormatException or IOException or UnauthorizedAccessException)
+            {
+                failedFileNames.Add(file.FileName);
+            }
+        }
+
+        if (lastImported is not null)
+        {
+            SelectedTemplate = lastImported;
+        }
+
+        ErrorMessage = failedFileNames.Count > 0
+            ? $"{failedFileNames.Count} 件のファイルを取り込めませんでした: {string.Join(", ", failedFileNames)}"
+            : null;
+        StatusMessage = importedCount > 0
+            ? $"{importedCount} 件のテンプレートを取り込みました。"
+            : null;
+
+        return importedCount;
+    }
+
+    // 保存済みの全テンプレートを指定フォルダへ書き出す(#60)。編集中の未保存変更は含まれない
+    public async Task ExportAllAsync(
+        string destinationDirectoryPath,
+        CancellationToken cancellationToken = default)
+    {
         try
         {
-            ChartTemplate template = ChartTemplateSerializer.Deserialize(json);
-            StoredTemplate stored = await _store.SaveAsync(id: null, template, cancellationToken);
+            TemplateExportResult result = await _store.ExportAllAsync(
+                destinationDirectoryPath,
+                cancellationToken);
 
-            TemplateItemViewModel item = new(stored.Id, stored.Template);
-            Templates.Add(item);
-            SelectedTemplate = item;
-            ErrorMessage = null;
-            return true;
-        }
-        catch (TemplateFormatException exception)
-        {
-            ErrorMessage = $"{fileName} を取り込めません: {exception.Message}";
-            return false;
+            ErrorMessage = result.Failures.Count > 0
+                ? $"{result.Failures.Count} 件のテンプレートをエクスポートできませんでした: "
+                    + string.Join(", ", result.Failures.Select(failure => failure.FileName))
+                : null;
+
+            string statusMessage = $"{result.ExportedCount} 件のテンプレートをエクスポートしました。";
+            if (HasUnsavedChanges)
+            {
+                statusMessage += "未保存の変更は含まれていません。";
+            }
+
+            StatusMessage = statusMessage;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            ErrorMessage = $"{fileName} の取り込みに失敗しました: {exception.Message}";
-            return false;
+            ErrorMessage = $"テンプレートのエクスポートに失敗しました: {exception.Message}";
+            StatusMessage = null;
         }
     }
 
