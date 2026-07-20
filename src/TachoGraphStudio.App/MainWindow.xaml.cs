@@ -388,7 +388,7 @@ public sealed partial class MainWindow : Window
     }
 
     // テンプレート選択 ComboBox の SelectionChanged(#43)。VM 駆動の変更とユーザー操作の
-    // 区別・「テンプレートを編集...」選択時の revert とエディタ起動は
+    // 区別・「テンプレート登録・編集」選択時の revert とエディタ起動は
     // TemplateSelectionComboBoxController(WinUI 非依存、ユニットテスト対象)に委譲する
     private async void OnTemplateSelectionComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
