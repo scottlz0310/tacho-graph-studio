@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- CI: テスト実行時にコードカバレッジ（Cobertura）を収集し Codecov へアップロードするステップと、カバレッジ低下を informational として扱う `codecov.yml` を追加
+
 ### Fixed
 
 - App: チャート紙様式 `ComboBox` の選択肢が `ToString()` フォールバックで冗長表示されていた問題を修正。`TemplateSelectionItemTemplateSelector` に 2 引数版 `SelectTemplateCore` を override し、テンプレート名のみを表示する。あわせて編集導線の文言を「テンプレート登録・編集」へ変更（#59）

@@ -12,6 +12,10 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      # Codecov への OIDC 認証(トークンレス)に必要
+      id-token: write
     steps:
       - uses: actions/checkout@v7
 
@@ -29,10 +33,16 @@ jobs:
         run: dotnet build TachoGraphStudio.slnx -c Release -p:Platform=x64 --no-restore
 
       - name: Test (Core)
-        run: dotnet test tests/TachoGraphStudio.Core.Tests -c Release --no-restore
+        run: dotnet test tests/TachoGraphStudio.Core.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
 
       - name: Test (App)
-        run: dotnet test tests/TachoGraphStudio.App.Tests -c Release --no-restore
+        run: dotnet test tests/TachoGraphStudio.App.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          directory: coverage
 
       - name: Run PowerShell Tests
         shell: pwsh
