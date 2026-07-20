@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -12,6 +13,8 @@ namespace TachoGraphStudio.App.Stage;
 
 public sealed partial class StageViewModel : ObservableObject
 {
+    // 書式中の "/" はカルチャの日付区切り文字へ置換されるため、必ず
+    // InvariantCulture で整形する(Windows の地域設定に表示が左右されないように)
     private const string PrintDateFormat = "yyyy/MM/dd";
 
     private readonly IImageSourceFactory _imageSourceFactory;
@@ -397,7 +400,7 @@ public sealed partial class StageViewModel : ObservableObject
     {
         foreach (DiscWorkItem disc in Discs)
         {
-            disc.Metadata.PrintDate = value.ToString(PrintDateFormat);
+            disc.Metadata.PrintDate = value.ToString(PrintDateFormat, CultureInfo.InvariantCulture);
         }
     }
 
@@ -442,7 +445,7 @@ public sealed partial class StageViewModel : ObservableObject
                         disc.Width,
                         disc.Height),
                 };
-                item.Metadata.PrintDate = TargetDate.ToString(PrintDateFormat);
+                item.Metadata.PrintDate = TargetDate.ToString(PrintDateFormat, CultureInfo.InvariantCulture);
                 item.Metadata.SkipHandwritten = SkipHandwritten;
                 // 直近の選択(または起動時に復元した既定)を新規円盤の初期値として引き継ぐ(#43)
                 item.Metadata.SelectedTemplateId = lastUsedTemplateId;
