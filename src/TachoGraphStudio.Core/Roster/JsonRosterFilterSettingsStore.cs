@@ -52,6 +52,7 @@ public sealed class JsonRosterFilterSettingsStore : IRosterFilterSettingsStore, 
         {
             Season = document.Season,
             TachoTargetsOnly = document.TachoTargetsOnly,
+            VendorCode = document.VendorCode,
         };
     }
 
@@ -66,6 +67,7 @@ public sealed class JsonRosterFilterSettingsStore : IRosterFilterSettingsStore, 
             Version = CurrentVersion,
             Season = settings.Season,
             TachoTargetsOnly = settings.TachoTargetsOnly,
+            VendorCode = settings.VendorCode,
         };
 
         return _file.WriteAsync(document, cancellationToken);
@@ -85,5 +87,8 @@ public sealed class JsonRosterFilterSettingsStore : IRosterFilterSettingsStore, 
 
         [JsonRequired]
         public bool TachoTargetsOnly { get; init; }
+
+        // VendorCode 追加(#61)前の保存ファイルも読めるよう JsonRequired にしない
+        public string? VendorCode { get; init; }
     }
 }
