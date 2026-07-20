@@ -97,15 +97,18 @@
                         Message="{x:Bind RosterViewModel.VendorWarningMessage, Mode=OneWay}"
                         Severity="Warning" />
                     <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                        <!-- 通年は夏冬に追加される性質のため、単独カテゴリに見えない表記にする(#62)。
+                             絞り込み自体は Tag(RosterSeason)が駆動しており挙動は変わらない -->
                         <ComboBox
                             x:Name="SeasonComboBox"
                             MinWidth="140"
                             Header="シーズン"
-                            SelectionChanged="OnSeasonComboBoxSelectionChanged">
+                            SelectionChanged="OnSeasonComboBoxSelectionChanged"
+                            ToolTipService.ToolTip="冬期(除雪)・夏期維持には通年の車両も含まれます">
                             <ComboBoxItem Content="全て" Tag="All" />
                             <ComboBoxItem Content="冬期(除雪)" Tag="Winter" />
                             <ComboBoxItem Content="夏期維持" Tag="Summer" />
-                            <ComboBoxItem Content="通年" Tag="YearRound" />
+                            <ComboBoxItem Content="通年のみ" Tag="YearRound" />
                         </ComboBox>
                         <CheckBox
                             x:Name="TachoTargetsOnlyCheckBox"

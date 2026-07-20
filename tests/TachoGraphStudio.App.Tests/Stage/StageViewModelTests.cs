@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 
 using Microsoft.UI.Xaml.Media;
@@ -171,6 +172,35 @@ public sealed class StageViewModelTests : IDisposable
         await viewModel.ImportAsync(["sheet.pdf"]);
 
         Assert.All(viewModel.Discs, disc => Assert.Equal("2026/07/19", disc.Metadata.PrintDate));
+    }
+
+    // 書式中の "/" はカルチャの日付区切り文字へ置換されるため、区切り文字を変更した
+    // カルチャでも yyyy/MM/dd を維持することを確認する(Windows の地域設定への依存を防ぐ)
+    [Theory]
+    [InlineData("-")]
+    [InlineData(".")]
+    public async Task PrintDate_UsesInvariantSeparatorRegardlessOfCurrentCulture(string dateSeparator)
+    {
+        CultureInfo originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo culture = (CultureInfo)originalCulture.Clone();
+        culture.DateTimeFormat.DateSeparator = dateSeparator;
+        CultureInfo.CurrentCulture = culture;
+        try
+        {
+            FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+            StageViewModel viewModel = CreateViewModel(pipeline);
+            await viewModel.ImportAsync(["sheet.pdf"]);
+
+            Assert.Equal("2026/07/19", viewModel.Discs[0].Metadata.PrintDate);
+
+            viewModel.TargetDate = new DateOnly(2026, 12, 25);
+
+            Assert.Equal("2026/12/25", viewModel.Discs[0].Metadata.PrintDate);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     [Fact]
