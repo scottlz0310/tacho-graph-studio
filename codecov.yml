@@ -1,4 +1,4 @@
-# NOTE: ASCII only — the codecov CLI reads this file with cp1252 on Windows
+# NOTE: ASCII only - the codecov CLI reads this file with cp1252 on Windows
 # runners and crashes on non-ASCII bytes (UnicodeDecodeError).
 # Coverage drops are reported as informational and never block CI.
 coverage:
