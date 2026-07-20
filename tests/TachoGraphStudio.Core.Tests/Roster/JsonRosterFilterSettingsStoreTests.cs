@@ -11,13 +11,14 @@ public sealed class JsonRosterFilterSettingsStoreTests : IDisposable
         $"TachoGraphStudio.Tests-{Guid.NewGuid():N}");
 
     [Theory]
-    [InlineData(RosterSeason.All, true)]
-    [InlineData(RosterSeason.Winter, false)]
-    [InlineData(RosterSeason.Summer, true)]
-    [InlineData(RosterSeason.YearRound, false)]
+    [InlineData(RosterSeason.All, true, null)]
+    [InlineData(RosterSeason.Winter, false, "arata")]
+    [InlineData(RosterSeason.Summer, true, "yamamoto")]
+    [InlineData(RosterSeason.YearRound, false, null)]
     public async Task WriteAndReadAsync_RoundTripsSettings(
         RosterSeason season,
-        bool tachoTargetsOnly)
+        bool tachoTargetsOnly,
+        string? vendorCode)
     {
         string settingsPath = Path.Combine(_temporaryDirectory, "roster-filter.json");
         using JsonRosterFilterSettingsStore store = new(settingsPath);
@@ -25,6 +26,7 @@ public sealed class JsonRosterFilterSettingsStoreTests : IDisposable
         {
             Season = season,
             TachoTargetsOnly = tachoTargetsOnly,
+            VendorCode = vendorCode,
         };
 
         await store.WriteAsync(settings, CancellationToken.None);
@@ -34,6 +36,26 @@ public sealed class JsonRosterFilterSettingsStoreTests : IDisposable
         string json = await File.ReadAllTextAsync(settingsPath, CancellationToken.None);
         Assert.DoesNotContain("keyword", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("controlNumber", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ReadAsync_DocumentWithoutVendorCodeIsReadWithNullVendorCode()
+    {
+        // VendorCode 追加(#61)前に保存されたファイルとの後方互換
+        Directory.CreateDirectory(_temporaryDirectory);
+        string settingsPath = Path.Combine(_temporaryDirectory, "roster-filter.json");
+        await File.WriteAllTextAsync(
+            settingsPath,
+            "{\"version\":1,\"season\":\"winter\",\"tachoTargetsOnly\":true}",
+            CancellationToken.None);
+        using JsonRosterFilterSettingsStore store = new(settingsPath);
+
+        RosterFilterSettings? result = await store.ReadAsync(CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(RosterSeason.Winter, result.Season);
+        Assert.True(result.TachoTargetsOnly);
+        Assert.Null(result.VendorCode);
     }
 
     [Fact]

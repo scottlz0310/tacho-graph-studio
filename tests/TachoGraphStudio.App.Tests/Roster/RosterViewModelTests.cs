@@ -173,6 +173,167 @@ public sealed class RosterViewModelTests
         Assert.Equal(0, activatedCount);
     }
 
+    [Fact]
+    public async Task RefreshAsync_PopulatesVendorOptionsExcludingVendorsWithoutViewRanges()
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        viewModel.SetRosterClient(
+            new StubRosterClient(CreateRosterResult(100, 550)),
+            new StubVendorClient(CreateVendorResult()));
+
+        await viewModel.RefreshAsync();
+
+        // 「全て」+ 閲覧範囲を持つ業者のみ。範囲行なし(admin)は除外される
+        Assert.Equal([null, "arata"], viewModel.VendorOptions.Select(option => option.Code));
+        Assert.Null(viewModel.VendorWarningMessage);
+    }
+
+    [Fact]
+    public async Task SelectedVendorChange_FiltersEntriesByViewRangesAndPersistsCode()
+    {
+        RecordingFilterSettingsStore settingsStore = new();
+        RosterViewModel viewModel = new(settingsStore);
+        viewModel.SetRosterClient(
+            new StubRosterClient(CreateRosterResult(100, 550)),
+            new StubVendorClient(CreateVendorResult()));
+        await viewModel.RefreshAsync();
+        Assert.Equal(2, viewModel.Entries.Count);
+
+        viewModel.SelectedVendorOption = viewModel.VendorOptions.Single(option => option.Code == "arata");
+
+        RosterEntry entry = Assert.Single(viewModel.Entries);
+        Assert.Equal(100, entry.ControlNumber);
+        Assert.Equal("arata", settingsStore.LastWrittenSettings?.VendorCode);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_RestoresPersistedVendorSelection()
+    {
+        RecordingFilterSettingsStore settingsStore = new()
+        {
+            SavedSettings = new RosterFilterSettings { VendorCode = "arata" },
+        };
+        RosterViewModel viewModel = new(settingsStore);
+        await viewModel.LoadFilterSettingsAsync();
+        viewModel.SetRosterClient(
+            new StubRosterClient(CreateRosterResult(100, 550)),
+            new StubVendorClient(CreateVendorResult()));
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal("arata", viewModel.SelectedVendorOption?.Code);
+        RosterEntry entry = Assert.Single(viewModel.Entries);
+        Assert.Equal(100, entry.ControlNumber);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_PersistedVendorMissingFromListFallsBackToAll()
+    {
+        RecordingFilterSettingsStore settingsStore = new()
+        {
+            SavedSettings = new RosterFilterSettings { VendorCode = "deleted-vendor" },
+        };
+        RosterViewModel viewModel = new(settingsStore);
+        await viewModel.LoadFilterSettingsAsync();
+        viewModel.SetRosterClient(
+            new StubRosterClient(CreateRosterResult(100, 550)),
+            new StubVendorClient(CreateVendorResult()));
+
+        await viewModel.RefreshAsync();
+
+        Assert.Null(viewModel.SelectedVendorOption?.Code);
+        Assert.Equal(2, viewModel.Entries.Count);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_VendorFailureSetsWarningAndKeepsRosterUsable()
+    {
+        VendorUnavailableException vendorFailure = new(
+            "リモート業者マスタに接続できず、利用可能なローカルキャッシュもありません。",
+            new HttpRequestException("Network unavailable."));
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        viewModel.SetRosterClient(
+            new StubRosterClient(CreateRosterResult(100, 550)),
+            new StubVendorClient(vendorFailure));
+
+        await viewModel.RefreshAsync();
+
+        Assert.NotNull(viewModel.VendorWarningMessage);
+        Assert.True(viewModel.HasVendorWarning);
+        Assert.Null(viewModel.ErrorMessage);
+        Assert.Equal(2, viewModel.Entries.Count);
+        VendorOption option = Assert.Single(viewModel.VendorOptions);
+        Assert.Null(option.Code);
+    }
+
+    private static RosterResult CreateRosterResult(params long[] controlNumbers)
+    {
+        return new RosterResult(
+            controlNumbers
+                .Select(controlNumber => new RosterEntry
+                {
+                    ControlNumber = controlNumber,
+                    Detail = "除雪車",
+                    IsTachoTarget = true,
+                })
+                .ToArray(),
+            RosterDataSource.Remote,
+            RetrievedAt);
+    }
+
+    private static VendorResult CreateVendorResult()
+    {
+        return new VendorResult(
+            [
+                new VendorEntry
+                {
+                    Code = "arata",
+                    DisplayName = "アラタ工業",
+                    ViewRanges = [new CtrlNumRange(100, 499)],
+                },
+                new VendorEntry { Code = "admin", DisplayName = "管理者" },
+            ],
+            RosterDataSource.Remote,
+            RetrievedAt);
+    }
+
+    private sealed class StubVendorClient : IVendorClient
+    {
+        private readonly Exception? _exception;
+        private readonly VendorResult? _result;
+
+        public StubVendorClient(VendorResult result)
+        {
+            _result = result;
+        }
+
+        public StubVendorClient(Exception exception)
+        {
+            _exception = exception;
+        }
+
+        public Task<VendorResult> GetVendorsAsync(CancellationToken cancellationToken = default) =>
+            _exception is null
+                ? Task.FromResult(_result!)
+                : Task.FromException<VendorResult>(_exception);
+    }
+
+    private sealed class RecordingFilterSettingsStore : IRosterFilterSettingsStore
+    {
+        public RosterFilterSettings? SavedSettings { get; init; }
+
+        public RosterFilterSettings? LastWrittenSettings { get; private set; }
+
+        public Task<RosterFilterSettings?> ReadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(SavedSettings);
+
+        public Task WriteAsync(RosterFilterSettings settings, CancellationToken cancellationToken = default)
+        {
+            LastWrittenSettings = settings;
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class ThrowingFilterSettingsStore : IRosterFilterSettingsStore
     {
         private readonly Exception _readException;

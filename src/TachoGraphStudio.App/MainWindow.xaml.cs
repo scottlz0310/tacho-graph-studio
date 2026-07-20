@@ -482,7 +482,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RosterViewModel.SetRosterClient(BuildRosterClient(credentials));
+        RosterViewModel.SetRosterClient(BuildRosterClient(credentials), BuildVendorClient(credentials));
         await RosterViewModel.RefreshAsync();
     }
 
@@ -496,6 +496,18 @@ public sealed partial class MainWindow : Window
                 "roster-cache.json"));
 
         return new CachedRosterClient(remoteClient, cache);
+    }
+
+    private IVendorClient BuildVendorClient(SupabaseCredentials credentials)
+    {
+        PostgRestVendorClient remoteClient = new(_httpClient, credentials.ProjectUrl, credentials.AnonKey);
+        JsonVendorCache cache = new(
+            Path.Combine(
+                ApplicationData.Current.LocalCacheFolder.Path,
+                "roster",
+                "vendor-cache.json"));
+
+        return new CachedVendorClient(remoteClient, cache);
     }
 
     private async Task OpenSettingsDialogAsync()

@@ -74,6 +74,44 @@ public sealed class RosterFilterTests
         Assert.Equal(expected, result.Count == 1);
     }
 
+    [Theory]
+    [InlineData(50, false)]
+    [InlineData(100, true)]
+    [InlineData(499, true)]
+    [InlineData(550, false)]
+    [InlineData(700, true)]
+    [InlineData(899, true)]
+    [InlineData(900, false)]
+    public void Apply_FiltersByVendorViewRanges(long controlNumber, bool expected)
+    {
+        RosterEntry entry = CreateEntry(controlNumber: controlNumber);
+        IReadOnlyList<CtrlNumRange> viewRanges = [new(100, 499), new(700, 899)];
+
+        IReadOnlyList<RosterEntry> result = RosterFilter.Apply(
+            [entry],
+            new RosterFilterSettings { TachoTargetsOnly = false },
+            keyword: null,
+            viewRanges);
+
+        Assert.Equal(expected, result.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Apply_NullOrEmptyVendorRangesDoNotFilter(bool useEmptyRanges)
+    {
+        RosterEntry entry = CreateEntry(controlNumber: 12345);
+
+        IReadOnlyList<RosterEntry> result = RosterFilter.Apply(
+            [entry],
+            new RosterFilterSettings { TachoTargetsOnly = false },
+            keyword: null,
+            useEmptyRanges ? [] : null);
+
+        Assert.Single(result);
+    }
+
     [Fact]
     public void Apply_DefaultSettingsShowOnlyTachoTargets()
     {

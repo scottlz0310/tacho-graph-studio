@@ -15,4 +15,7 @@ public sealed record RosterFilterSettings
     public RosterSeason Season { get; init; } = RosterSeason.All;
 
     public bool TachoTargetsOnly { get; init; } = true;
+
+    // 選択中の業者コード(vendors.code)。null は「全て」(業者フィルターなし)(#61)
+    public string? VendorCode { get; init; }
 }

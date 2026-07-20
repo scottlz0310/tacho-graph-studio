@@ -13,7 +13,10 @@ public sealed partial class RosterViewModel : ObservableObject
 
     private IReadOnlyList<RosterEntry> _allEntries = [];
     private bool _isInitializingFilterSettings;
+    // 保存済みの業者コード。業者一覧のロード完了時(UpdateVendorOptions)に選択へ反映する
+    private string? _pendingVendorCode;
     private IRosterClient? _rosterClient;
+    private IVendorClient? _vendorClient;
 
     public RosterViewModel(IRosterFilterSettingsStore filterSettingsStore)
     {
@@ -27,6 +30,10 @@ public sealed partial class RosterViewModel : ObservableObject
     public event EventHandler<RosterEntry>? EntryActivated;
 
     public ObservableCollection<RosterEntry> Entries { get; } = [];
+
+    // 業者フィルターの選択肢(#61)。先頭は常に「全て」で、業者一覧のロード成否に
+    // かかわらず選択可能な状態を維持する
+    public ObservableCollection<VendorOption> VendorOptions { get; } = [VendorOption.All];
 
     // 行由来の item のみ適用する。ヘッダー・空白部など名簿行以外からの操作では発火せず、
     // 手修正(FR-15)を意図せず名簿値へ戻さない
@@ -87,6 +94,13 @@ public sealed partial class RosterViewModel : ObservableObject
     public partial RosterEntry? SelectedEntry { get; set; }
 
     [ObservableProperty]
+    public partial VendorOption? SelectedVendorOption { get; set; } = VendorOption.All;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasVendorWarning))]
+    public partial string? VendorWarningMessage { get; set; }
+
+    [ObservableProperty]
     public partial bool TachoTargetsOnly { get; set; } = RosterFilterSettings.Default.TachoTargetsOnly;
 
     public string DataSourceLabel => DataSource switch
@@ -101,6 +115,8 @@ public sealed partial class RosterViewModel : ObservableObject
         : "Supabase 未接続";
 
     public bool HasFilterSettingsWarning => FilterSettingsWarningMessage is not null;
+
+    public bool HasVendorWarning => VendorWarningMessage is not null;
 
     public bool IsNotConfiguredStateVisible => !IsCredentialsConfigured;
 
@@ -132,6 +148,7 @@ public sealed partial class RosterViewModel : ObservableObject
         {
             Season = savedSettings.Season;
             TachoTargetsOnly = savedSettings.TachoTargetsOnly;
+            _pendingVendorCode = savedSettings.VendorCode;
         }
         finally
         {
@@ -139,9 +156,10 @@ public sealed partial class RosterViewModel : ObservableObject
         }
     }
 
-    public void SetRosterClient(IRosterClient? rosterClient)
+    public void SetRosterClient(IRosterClient? rosterClient, IVendorClient? vendorClient = null)
     {
         _rosterClient = rosterClient;
+        _vendorClient = vendorClient;
         IsCredentialsConfigured = rosterClient is not null;
 
         if (rosterClient is not null)
@@ -165,6 +183,10 @@ public sealed partial class RosterViewModel : ObservableObject
 
         IsLoading = true;
         ErrorMessage = null;
+
+        // 業者一覧を先に取得する(保存済みの業者選択の復元とフィルタ適用に必要)。
+        // 取得失敗しても名簿自体は利用できるため、警告表示のうえ「全て」のみで続行する
+        await RefreshVendorOptionsAsync(cancellationToken);
 
         try
         {
@@ -212,6 +234,59 @@ public sealed partial class RosterViewModel : ObservableObject
         }
     }
 
+    private async Task RefreshVendorOptionsAsync(CancellationToken cancellationToken)
+    {
+        if (_vendorClient is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<VendorEntry> vendors;
+        try
+        {
+            VendorResult result = await _vendorClient.GetVendorsAsync(cancellationToken);
+            vendors = result.Vendors;
+            VendorWarningMessage = null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            vendors = [];
+            VendorWarningMessage = "業者一覧の取得に失敗しました。業者フィルターなしで続行します。";
+        }
+
+        UpdateVendorOptions(vendors);
+    }
+
+    private void UpdateVendorOptions(IReadOnlyList<VendorEntry> vendors)
+    {
+        string? targetCode = _pendingVendorCode ?? SelectedVendorOption?.Code;
+        _pendingVendorCode = null;
+
+        VendorOptions.Clear();
+        VendorOptions.Add(VendorOption.All);
+        foreach (VendorEntry vendor in vendors)
+        {
+            // 閲覧用範囲を持たない業者(admin 等)は絞り込みに使えないため選択肢から除外する
+            if (vendor.ViewRanges.Count > 0)
+            {
+                VendorOptions.Add(new VendorOption(vendor.Code, vendor.DisplayName, vendor.ViewRanges));
+            }
+        }
+
+        // 保存済みの業者が一覧から消えていた場合は「全て」へフォールバックする。
+        // 選択の同期はロード処理の一部なので、setter 由来の永続化は抑止する
+        _isInitializingFilterSettings = true;
+        try
+        {
+            SelectedVendorOption =
+                VendorOptions.FirstOrDefault(option => option.Code == targetCode) ?? VendorOption.All;
+        }
+        finally
+        {
+            _isInitializingFilterSettings = false;
+        }
+    }
+
     partial void OnSearchKeywordChanged(string value) => ApplyFilter();
 
     partial void OnSeasonChanged(RosterSeason value)
@@ -230,10 +305,21 @@ public sealed partial class RosterViewModel : ObservableObject
         }
     }
 
+    partial void OnSelectedVendorOptionChanged(VendorOption? value)
+    {
+        if (!_isInitializingFilterSettings)
+        {
+            ApplyFilterAndPersistSettings();
+        }
+    }
+
     private void ApplyFilter()
     {
-        RosterFilterSettings settings = new() { Season = Season, TachoTargetsOnly = TachoTargetsOnly };
-        IReadOnlyList<RosterEntry> filteredEntries = RosterFilter.Apply(_allEntries, settings, SearchKeyword);
+        IReadOnlyList<RosterEntry> filteredEntries = RosterFilter.Apply(
+            _allEntries,
+            BuildFilterSettings(),
+            SearchKeyword,
+            SelectedVendorOption?.ViewRanges);
 
         Entries.Clear();
         foreach (RosterEntry entry in filteredEntries)
@@ -248,12 +334,18 @@ public sealed partial class RosterViewModel : ObservableObject
 
         try
         {
-            RosterFilterSettings settings = new() { Season = Season, TachoTargetsOnly = TachoTargetsOnly };
-            await _filterSettingsStore.WriteAsync(settings);
+            await _filterSettingsStore.WriteAsync(BuildFilterSettings());
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             FilterSettingsWarningMessage = "名簿フィルタ設定の保存に失敗しました。";
         }
     }
+
+    private RosterFilterSettings BuildFilterSettings() => new()
+    {
+        Season = Season,
+        TachoTargetsOnly = TachoTargetsOnly,
+        VendorCode = SelectedVendorOption?.Code,
+    };
 }
