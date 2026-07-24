@@ -16,7 +16,7 @@ public sealed class JsonAppStateStoreTests : IDisposable
         using JsonAppStateStore store = new(StatePath);
         AppState state = new()
         {
-            OutputDirectory = @"C:\Users\dev\Pictures\タコチャート",
+            OutputDirectory = @"C:\TestData\Pictures\タコチャート",
             LastTargetDate = new DateOnly(2026, 7, 19),
             SelectedTemplateId = "Yazaki45",
             SidebarWidth = 420.5,
