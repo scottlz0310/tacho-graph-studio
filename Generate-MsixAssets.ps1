@@ -2,8 +2,10 @@
 # Generates all required scale and targetsize variants from source images
 
 param(
-    [string]$SourceIcon = "C:\Users\dev\Dropbox\工事データ\TachoGraphStudio\assets\icon.png",
-    [string]$SourceSplash = "C:\Users\dev\Dropbox\工事データ\TachoGraphStudio\assets\splash_logo.png",
+    [Parameter(Mandatory = $true)]
+    [string]$SourceIcon,
+    [Parameter(Mandatory = $true)]
+    [string]$SourceSplash,
     [string]$OutputDir = "src\TachoGraphStudio.App\Assets"
 )
 
@@ -139,7 +141,7 @@ Save-Asset -SourceImage $iconImage -BaseName "Square44x44Logo" -BaseSize 44 -Out
 # Square44x44Logo - targetsize variants
 Write-Host ""
 Write-Host "Generating Square44x44Logo (targetsize variants)..."
-$targetSizes = @(16, 24, 32, 48, 256)
+$targetSizes = @(16, 20, 24, 30, 36, 40, 48, 60, 72, 80, 96, 256)
 foreach ($size in $targetSizes) {
     Save-TargetSizeAsset -SourceImage $iconImage -BaseName "Square44x44Logo" -TargetSize $size -OutputDir $OutputDir -Unplated $false
     Save-TargetSizeAsset -SourceImage $iconImage -BaseName "Square44x44Logo" -TargetSize $size -OutputDir $OutputDir -Unplated $true
