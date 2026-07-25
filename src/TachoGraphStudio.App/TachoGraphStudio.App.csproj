@@ -14,6 +14,10 @@
     <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
+    <!-- 既定の Auto は scale/DXFeatureLevel 修飾子を検出するとバンドル化し、
+         生成される ForBundle\AppxManifest.xml が MakeAppx の検証に落ちる（#76）。
+         配布は .appinstaller によるアーキテクチャ別 MSIX 単体のため、バンドルは不要。 -->
+    <AppxBundle>Never</AppxBundle>
     <!-- NFR-02: .NET / Windows App SDK ランタイムを MSIX に同梱し、外部ランタイム非依存にする -->
     <SelfContained>true</SelfContained>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>

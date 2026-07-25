@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Build: Release ワークフローの MSIX ビルドが MakeAppx エラー `80080204`（`The manifest must specify at least one Resource element with a Language attribute.`）で失敗する問題を修正（#76）。`AppxBundle` の既定値 `Auto` が #69 で追加した scale 派生アセットを検出して自動バンドル化し、生成される `ForBundle\AppxManifest.xml` が MakeAppx の検証に落ちていた。配布は `.appinstaller` によるアーキテクチャ別 MSIX 単体のためバンドルは不要であり、`<AppxBundle>Never</AppxBundle>` を明示する
+
 ## [0.1.3] - 2026-07-25
 
 Windows パッケージアセットの各種解像度対応とビルドツールの更新を含むパッチリリース。
