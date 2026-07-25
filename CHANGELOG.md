@@ -10,13 +10,14 @@
 
 - App: 起動時のスプラッシュ表示を追加（#81）。MSIX の `uap:SplashScreen` は UWP 専用要素であり WinUI 3 デスクトップアプリでは OS が描画しないため、WinUIEx の `SimpleSplashScreen` を `Application.Start` より前に呼び出す独自 `Program.Main`（`DISABLE_XAML_GENERATED_MAIN`）で表示し、`MainWindow` の初回 `Activated` で破棄する。これにより WinUI ランタイム初期化中（`SelfContained` のため重い）の無表示区間も覆われる
 - Asset: Start メニュータイル用の `Square71x71Logo`（小タイル）/ `Square310x310Logo`（大タイル）を追加し、`uap:DefaultTile` に `ShortName` と `ShowNameOnTiles` を設定（#82）。従来は `Square150x150Logo` からの拡縮で代用されていた
-- Asset: アセット原画を `assets-source/` に配置し、リポジトリ単体で `Generate-MsixAssets.ps1` を再実行できるようにした（#83）。従来は原画がリポジトリ外にあり再生成できなかった
+- Asset: アセット原画を `assets-source/` に配置し、リポジトリ単体で `scripts/Generate-MsixAssets.ps1` を再実行できるようにした（#83）。従来は原画がリポジトリ外にあり再生成できなかった
 
 ### Changed
 
 - Asset: `scale-400` 派生を削除し、生成スケールを 100 / 125 / 150 / 200 に変更（#83）。400% スケーリングは実運用でほぼ存在せず、サイドロード配布のため Store 要件も適用されない。パッケージ内アセットは約 4.9MB から 3.8MB に減少
-- Asset: `Generate-MsixAssets.ps1` が生成前に既存 PNG を削除するよう変更（#80）。命名規則を変更しても旧世代のファイルが取り残されない。あわせて生成対象から漏れていた `targetsize-32`（Explorer / Alt+Tab の標準サイズ）を生成リストに追加した
+- Asset: `scripts/Generate-MsixAssets.ps1` が生成前に既存 PNG を削除するよう変更（#80）。命名規則を変更しても旧世代のファイルが取り残されない。あわせて生成対象から漏れていた `targetsize-32`（Explorer / Alt+Tab の標準サイズ）を生成リストに追加した
 - App: `Package.appxmanifest` の `Version` を現行リリースに合わせ `0.1.3.0` へ更新（#83）。CI はタグから置換するため配布物には影響しないが、ローカルビルド時の乖離を解消する
+- Asset: `Generate-MsixAssets.ps1` をリポジトリルートから `scripts/` へ移動し、既定の入出力パスを `$PSScriptRoot` 基準に変更（#85）。他の PowerShell スクリプトと配置が揃い、実行時の作業ディレクトリに依存しなくなる。#84 で修正したパス解決の不整合（削除は PowerShell の位置基準・書き込みは .NET `CurrentDirectory` 基準）と同種の事故を構造的に防ぐ
 
 ### Fixed
 
@@ -35,7 +36,7 @@ Windows パッケージアセットの各種解像度対応とビルドツール
 
 - App: `Package.appxmanifest` の `BackgroundColor` を原稿画像の背景色にあわせて `#2a1250` へ変更（#69）
 - App: `TachoGraphStudio.App.csproj` に `<ApplicationIcon>Assets\app.ico</ApplicationIcon>` を追加
-- Asset: `Generate-MsixAssets.ps1` で `Square150x150Logo` を `icon.png` から生成するよう調整（#69）
+- Asset: `scripts/Generate-MsixAssets.ps1` で `Square150x150Logo` を `icon.png` から生成するよう調整（#69）
 - Build: `Microsoft.Windows.SDK.BuildTools` を `10.0.28000.2526` へアップデート（#71）
 
 ### Fixed
