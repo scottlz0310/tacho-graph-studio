@@ -7,15 +7,18 @@ assets-source/ の原画から、scale 修飾子つき派生と targetsize 派�
 生成前に既存の生成物を削除するため、命名規則を変更しても旧世代のファイルが
 取り残されない（#80）。
 
+既定の入出力パスはスクリプト自身の位置（$PSScriptRoot）基準で解決するため、
+どの作業ディレクトリから実行しても結果は変わらない（#85）。
+
 scale 100 は修飾子なしのファイル名（例: SplashScreen.png）で出力する。
 `.scale-100.png` を併置すると 100% DPI 環境でそちらが優先され、
 非修飾版との差分が事故になるため、どちらか一方に統一する必要がある。
 #>
 
 param(
-    [string]$SourceIcon = "assets-source\icon.png",
-    [string]$SourceSplash = "assets-source\splash.png",
-    [string]$OutputDir = "src\TachoGraphStudio.App\Assets"
+    [string]$SourceIcon = (Join-Path $PSScriptRoot "..\assets-source\icon.png"),
+    [string]$SourceSplash = (Join-Path $PSScriptRoot "..\assets-source\splash.png"),
+    [string]$OutputDir = (Join-Path $PSScriptRoot "..\src\TachoGraphStudio.App\Assets")
 )
 
 $ErrorActionPreference = "Stop"
