@@ -23,6 +23,9 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- splash を WinUI ランタイム初期化より前に出すため、XAML 生成の Main を抑止して
+         Program.cs の Main を使う（#81） -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,6 +35,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.10" />
     <PackageReference Include="WinUI.TableView" Version="1.4.1" />
+    <PackageReference Include="WinUIEx" Version="2.9.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,7 +43,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Assets\**" />
+    <!-- MSIX には appxrecipe 経由でプロジェクト配下から直接取り込まれるが、
+         AppWindow.SetIcon は実行ディレクトリを基準に解決するため出力にも配置する（#79） -->
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

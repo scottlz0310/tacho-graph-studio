@@ -1,13 +1,24 @@
-# MSIX Asset Generator for TachoGraphStudio
-# Generates all required scale and targetsize variants from source images
+﻿<#
+.SYNOPSIS
+MSIX パッケージ用のアセットを原画から一括生成する。
+
+.DESCRIPTION
+assets-source/ の原画から、scale 修飾子つき派生と targetsize 派生を生成する。
+生成前に既存の生成物を削除するため、命名規則を変更しても旧世代のファイルが
+取り残されない（#80）。
+
+scale 100 は修飾子なしのファイル名（例: SplashScreen.png）で出力する。
+`.scale-100.png` を併置すると 100% DPI 環境でそちらが優先され、
+非修飾版との差分が事故になるため、どちらか一方に統一する必要がある。
+#>
 
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$SourceIcon,
-    [Parameter(Mandatory = $true)]
-    [string]$SourceSplash,
+    [string]$SourceIcon = "assets-source\icon.png",
+    [string]$SourceSplash = "assets-source\splash.png",
     [string]$OutputDir = "src\TachoGraphStudio.App\Assets"
 )
+
+$ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Drawing
 
@@ -40,62 +51,14 @@ function Resize-ImageHighQuality {
     return $destImage
 }
 
-function Save-Asset {
-    param(
-        [System.Drawing.Image]$SourceImage,
-        [string]$BaseName,
-        [int]$BaseSize,
-        [string]$OutputDir,
-        [int[]]$Scales = @(100, 125, 150, 200, 400)
-    )
-
-    foreach ($scale in $Scales) {
-        $size = [math]::Round($BaseSize * $scale / 100)
-        $resized = Resize-ImageHighQuality -Image $SourceImage -Width $size -Height $size
-
-        $fileName = if ($scale -eq 100) {
-            "$BaseName.png"
-        } else {
-            "$BaseName.scale-$scale.png"
-        }
-
-        $outputPath = Join-Path $OutputDir $fileName
-        $resized.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
-        $resized.Dispose()
-
-        Write-Host "Generated: $fileName ($size x $size)"
-    }
-}
-
-function Save-TargetSizeAsset {
-    param(
-        [System.Drawing.Image]$SourceImage,
-        [string]$BaseName,
-        [int]$TargetSize,
-        [string]$OutputDir,
-        [bool]$Unplated = $false
-    )
-
-    $resized = Resize-ImageHighQuality -Image $SourceImage -Width $TargetSize -Height $TargetSize
-
-    $suffix = if ($Unplated) { "_altform-unplated" } else { "" }
-    $fileName = "$BaseName.targetsize-$TargetSize$suffix.png"
-
-    $outputPath = Join-Path $OutputDir $fileName
-    $resized.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
-    $resized.Dispose()
-
-    Write-Host "Generated: $fileName ($TargetSize x $TargetSize)"
-}
-
-function Save-SplashAsset {
+function Save-ScaledAsset {
     param(
         [System.Drawing.Image]$SourceImage,
         [string]$BaseName,
         [int]$BaseWidth,
         [int]$BaseHeight,
         [string]$OutputDir,
-        [int[]]$Scales = @(100, 125, 150, 200, 400)
+        [int[]]$Scales = @(100, 125, 150, 200)
     )
 
     foreach ($scale in $Scales) {
@@ -113,66 +76,99 @@ function Save-SplashAsset {
         $resized.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
         $resized.Dispose()
 
-        Write-Host "Generated: $fileName ($width x $height)"
+        Write-Host "  生成: $fileName ($width x $height)"
     }
 }
 
-Write-Host "Starting MSIX asset generation..."
+function Save-TargetSizeAsset {
+    param(
+        [System.Drawing.Image]$SourceImage,
+        [string]$BaseName,
+        [int]$TargetSize,
+        [string]$OutputDir
+    )
+
+    # plated（背景板つき）と unplated（背景板なし）は同一画像を別名で提供する。
+    # タスクバーは unplated、スタートメニューは plated を参照する。
+    foreach ($suffix in @("", "_altform-unplated")) {
+        $resized = Resize-ImageHighQuality -Image $SourceImage -Width $TargetSize -Height $TargetSize
+        $fileName = "$BaseName.targetsize-$TargetSize$suffix.png"
+        $resized.Save((Join-Path $OutputDir $fileName), [System.Drawing.Imaging.ImageFormat]::Png)
+        $resized.Dispose()
+
+        Write-Host "  生成: $fileName ($TargetSize x $TargetSize)"
+    }
+}
+
+Write-Host "MSIX アセット生成を開始します"
 Write-Host ""
 
-# Ensure output directory exists
+if (-not (Test-Path $SourceIcon)) { throw "原画が見つかりません: $SourceIcon" }
+if (-not (Test-Path $SourceSplash)) { throw "原画が見つかりません: $SourceSplash" }
+
 if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
 
-# Load source images
-$iconImage = [System.Drawing.Image]::FromFile($SourceIcon)
-$splashImage = [System.Drawing.Image]::FromFile($SourceSplash)
+# System.Drawing の Save() は相対パスを .NET の CurrentDirectory で解決するが、
+# PowerShell の Set-Location はこれを同期しない。一方で下の削除処理は PowerShell の
+# 位置基準で走るため、絶対パス化しないと「削除だけ正しい場所で実行され、生成物は
+# 別の場所へ書かれる（または書き込み失敗）」という破壊的な不整合になる
+$OutputDir = (Resolve-Path $OutputDir).Path
 
-Write-Host "Source images loaded:"
-Write-Host "  Icon: $($iconImage.Width)x$($iconImage.Height)"
-Write-Host "  Splash: $($splashImage.Width)x$($splashImage.Height)"
-Write-Host ""
-
-# Square44x44Logo (App icon) - scale variants
-Write-Host "Generating Square44x44Logo (scale variants)..."
-Save-Asset -SourceImage $iconImage -BaseName "Square44x44Logo" -BaseSize 44 -OutputDir $OutputDir
-
-# Square44x44Logo - targetsize variants
-Write-Host ""
-Write-Host "Generating Square44x44Logo (targetsize variants)..."
-$targetSizes = @(16, 20, 24, 30, 36, 40, 48, 60, 72, 80, 96, 256)
-foreach ($size in $targetSizes) {
-    Save-TargetSizeAsset -SourceImage $iconImage -BaseName "Square44x44Logo" -TargetSize $size -OutputDir $OutputDir -Unplated $false
-    Save-TargetSizeAsset -SourceImage $iconImage -BaseName "Square44x44Logo" -TargetSize $size -OutputDir $OutputDir -Unplated $true
+# 旧世代の生成物を除去する。app.ico は本スクリプトの生成対象外なので残す。
+$stale = Get-ChildItem -Path $OutputDir -Filter "*.png" -File
+if ($stale) {
+    Write-Host "既存の生成物 $($stale.Count) 件を削除します"
+    $stale | Remove-Item -Force
+    Write-Host ""
 }
 
-# Square150x150Logo (Medium tile) - scale variants
-Write-Host ""
-Write-Host "Generating Square150x150Logo (scale variants)..."
-Save-Asset -SourceImage $iconImage -BaseName "Square150x150Logo" -BaseSize 150 -OutputDir $OutputDir
+$iconImage = [System.Drawing.Image]::FromFile((Resolve-Path $SourceIcon))
+$splashImage = [System.Drawing.Image]::FromFile((Resolve-Path $SourceSplash))
 
-# Wide310x150Logo (Wide tile) - scale variants (non-square, use splash)
+Write-Host "原画:"
+Write-Host "  アイコン: $($iconImage.Width)x$($iconImage.Height)"
+Write-Host "  スプラッシュ: $($splashImage.Width)x$($splashImage.Height)"
 Write-Host ""
-Write-Host "Generating Wide310x150Logo (scale variants)..."
-Save-SplashAsset -SourceImage $splashImage -BaseName "Wide310x150Logo" -BaseWidth 310 -BaseHeight 150 -OutputDir $OutputDir
 
-# StoreLogo - scale variants
-Write-Host ""
-Write-Host "Generating StoreLogo (scale variants)..."
-Save-Asset -SourceImage $iconImage -BaseName "StoreLogo" -BaseSize 50 -OutputDir $OutputDir
+try {
+    # 正方形ロゴ群（アイコン原画由来）
+    foreach ($logo in @(
+            @{ Name = "Square44x44Logo"; Size = 44 },
+            @{ Name = "Square71x71Logo"; Size = 71 },
+            @{ Name = "Square150x150Logo"; Size = 150 },
+            @{ Name = "Square310x310Logo"; Size = 310 },
+            @{ Name = "StoreLogo"; Size = 50 }
+        )) {
+        Write-Host "$($logo.Name) を生成しています"
+        Save-ScaledAsset -SourceImage $iconImage -BaseName $logo.Name `
+            -BaseWidth $logo.Size -BaseHeight $logo.Size -OutputDir $OutputDir
+        Write-Host ""
+    }
 
-# SplashScreen - scale variants
-Write-Host ""
-Write-Host "Generating SplashScreen (scale variants)..."
-Save-SplashAsset -SourceImage $splashImage -BaseName "SplashScreen" -BaseWidth 620 -BaseHeight 300 -OutputDir $OutputDir
+    # タスクバー・エクスプローラー用の実寸アイコン
+    Write-Host "Square44x44Logo の targetsize 派生を生成しています"
+    foreach ($size in @(16, 20, 24, 30, 32, 36, 40, 48, 60, 72, 80, 96, 256)) {
+        Save-TargetSizeAsset -SourceImage $iconImage -BaseName "Square44x44Logo" `
+            -TargetSize $size -OutputDir $OutputDir
+    }
+    Write-Host ""
 
-# Clean up
-$iconImage.Dispose()
-$splashImage.Dispose()
+    # 横長アセット群（スプラッシュ原画由来）
+    foreach ($wide in @(
+            @{ Name = "Wide310x150Logo"; Width = 310; Height = 150 },
+            @{ Name = "SplashScreen"; Width = 620; Height = 300 }
+        )) {
+        Write-Host "$($wide.Name) を生成しています"
+        Save-ScaledAsset -SourceImage $splashImage -BaseName $wide.Name `
+            -BaseWidth $wide.Width -BaseHeight $wide.Height -OutputDir $OutputDir
+        Write-Host ""
+    }
+} finally {
+    $iconImage.Dispose()
+    $splashImage.Dispose()
+}
 
-Write-Host ""
-Write-Host "Asset generation completed!"
-Write-Host "Total assets in $OutputDir :"
-$assetCount = (Get-ChildItem -Path $OutputDir -Filter "*.png" | Measure-Object).Count
-Write-Host "  $assetCount PNG files"
+$assetCount = (Get-ChildItem -Path $OutputDir -Filter "*.png" -File | Measure-Object).Count
+Write-Host "生成完了: $OutputDir に PNG $assetCount 件"
