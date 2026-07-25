@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-25
+
+Windows パッケージアセットの各種解像度対応とビルドツールの更新を含むパッチリリース。
+
 ### Added
 
 - App: パッケージアセットの scale (100%, 125%, 150%, 200%, 400%) / targetsize 派生アセットおよび `app.ico` (マルチサイズ) を追加・生成（#69）
@@ -15,6 +19,7 @@
 - App: `Package.appxmanifest` の `BackgroundColor` を原稿画像の背景色にあわせて `#2a1250` へ変更（#69）
 - App: `TachoGraphStudio.App.csproj` に `<ApplicationIcon>Assets\app.ico</ApplicationIcon>` を追加
 - Asset: `Generate-MsixAssets.ps1` で `Square150x150Logo` を `icon.png` から生成するよう調整（#69）
+- Build: `Microsoft.Windows.SDK.BuildTools` を `10.0.28000.2526` へアップデート（#71）
 
 ## [0.1.2] - 2026-07-20
 
