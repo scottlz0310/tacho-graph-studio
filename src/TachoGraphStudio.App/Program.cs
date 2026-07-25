@@ -35,14 +35,16 @@ public static class Program
     private static SimpleSplashScreen? TryShowSplashScreen()
     {
         // splash は装飾であり、マニフェストの画像を解決できないだけでアプリを起動不能に
-        // してはならない。XAML 初期化前で UI もロガーも使えないため Debug 出力に留める
+        // してはならない。XAML 初期化前で UI もロガーも使えないためトレース出力に留める。
+        // Debug.WriteLine は [Conditional("DEBUG")] のため配布される Release 構成では
+        // 呼び出しごと消える。Trace は Release でも TRACE が定義されるため残る
         try
         {
             return SimpleSplashScreen.ShowDefaultSplashScreen();
         }
         catch (InvalidOperationException ex)
         {
-            Debug.WriteLine($"splash の表示に失敗したため splash なしで起動します: {ex.Message}");
+            Trace.WriteLine($"splash の表示に失敗したため splash なしで起動します: {ex.Message}");
             return null;
         }
     }
