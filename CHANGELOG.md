@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-26
+
+起動時スプラッシュの表示と Windows パッケージアセット（Start メニュータイル・DPI 別アイコン）の整備、およびアセット生成まわりの不具合修正を含むパッチリリース。
+
 ### Added
 
 - App: 起動時のスプラッシュ表示を追加（#81）。MSIX の `uap:SplashScreen` は UWP 専用要素であり WinUI 3 デスクトップアプリでは OS が描画しないため、WinUIEx の `SimpleSplashScreen` を `Application.Start` より前に呼び出す独自 `Program.Main`（`DISABLE_XAML_GENERATED_MAIN`）で表示し、`MainWindow` の初回 `Activated` で破棄する。これにより WinUI ランタイム初期化中（`SelfContained` のため重い）の無表示区間も覆われる
@@ -16,7 +20,7 @@
 
 - Asset: `scale-400` 派生を削除し、生成スケールを 100 / 125 / 150 / 200 に変更（#83）。400% スケーリングは実運用でほぼ存在せず、サイドロード配布のため Store 要件も適用されない。パッケージ内アセットは約 4.9MB から 3.8MB に減少
 - Asset: `scripts/Generate-MsixAssets.ps1` が生成前に既存 PNG を削除するよう変更（#80）。命名規則を変更しても旧世代のファイルが取り残されない。あわせて生成対象から漏れていた `targetsize-32`（Explorer / Alt+Tab の標準サイズ）を生成リストに追加した
-- App: `Package.appxmanifest` の `Version` を現行リリースに合わせ `0.1.3.0` へ更新（#83）。CI はタグから置換するため配布物には影響しないが、ローカルビルド時の乖離を解消する
+- App: `Package.appxmanifest` の `Version` をリリースバージョンに合わせ `0.1.4.0` へ更新（#83）。CI はタグから置換するため配布物には影響しないが、ローカルビルド時の乖離を解消する
 - Asset: `Generate-MsixAssets.ps1` をリポジトリルートから `scripts/` へ移動し、既定の入出力パスを `$PSScriptRoot` 基準に変更（#85）。他の PowerShell スクリプトと配置が揃い、実行時の作業ディレクトリに依存しなくなる。#84 で修正したパス解決の不整合（削除は PowerShell の位置基準・書き込みは .NET `CurrentDirectory` 基準）と同種の事故を構造的に防ぐ
 
 ### Fixed
