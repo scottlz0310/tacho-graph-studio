@@ -6,10 +6,6 @@
 
 ## [Unreleased]
 
-### Fixed
-
-- Build: Release ワークフローの MSIX ビルドが MakeAppx エラー `80080204`（`The manifest must specify at least one Resource element with a Language attribute.`）で失敗する問題を修正（#76）。`AppxBundle` の既定値 `Auto` が #69 で追加した scale 派生アセットを検出して自動バンドル化し、生成される `ForBundle\AppxManifest.xml` が MakeAppx の検証に落ちていた。配布は `.appinstaller` によるアーキテクチャ別 MSIX 単体のためバンドルは不要であり、`<AppxBundle>Never</AppxBundle>` を明示する
-
 ## [0.1.3] - 2026-07-25
 
 Windows パッケージアセットの各種解像度対応とビルドツールの更新を含むパッチリリース。
@@ -24,6 +20,10 @@ Windows パッケージアセットの各種解像度対応とビルドツール
 - App: `TachoGraphStudio.App.csproj` に `<ApplicationIcon>Assets\app.ico</ApplicationIcon>` を追加
 - Asset: `Generate-MsixAssets.ps1` で `Square150x150Logo` を `icon.png` から生成するよう調整（#69）
 - Build: `Microsoft.Windows.SDK.BuildTools` を `10.0.28000.2526` へアップデート（#71）
+
+### Fixed
+
+- Build: Release ワークフローの MSIX ビルドが MakeAppx エラー `80080204`（`The manifest must specify at least one Resource element with a Language attribute.`）で失敗する問題を修正（#76, #77）。`AppxBundle` の既定値 `Auto` が上記の scale 派生アセットを検出して自動バンドル化し、生成される `ForBundle\AppxManifest.xml` が MakeAppx の検証に落ちていた。配布は `.appinstaller` によるアーキテクチャ別 MSIX 単体のためバンドルは不要であり、`<AppxBundle>Never</AppxBundle>` を明示する
 
 ## [0.1.2] - 2026-07-20
 
