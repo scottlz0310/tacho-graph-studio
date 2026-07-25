@@ -6,6 +6,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- App: 起動時のスプラッシュ表示を追加（#81）。MSIX の `uap:SplashScreen` は UWP 専用要素であり WinUI 3 デスクトップアプリでは OS が描画しないため、WinUIEx の `SimpleSplashScreen` を `Application.Start` より前に呼び出す独自 `Program.Main`（`DISABLE_XAML_GENERATED_MAIN`）で表示し、`MainWindow` の初回 `Activated` で破棄する。これにより WinUI ランタイム初期化中（`SelfContained` のため重い）の無表示区間も覆われる
+- Asset: Start メニュータイル用の `Square71x71Logo`（小タイル）/ `Square310x310Logo`（大タイル）を追加し、`uap:DefaultTile` に `ShortName` と `ShowNameOnTiles` を設定（#82）。従来は `Square150x150Logo` からの拡縮で代用されていた
+- Asset: アセット原画を `assets-source/` に配置し、リポジトリ単体で `Generate-MsixAssets.ps1` を再実行できるようにした（#83）。従来は原画がリポジトリ外にあり再生成できなかった
+
+### Changed
+
+- Asset: `scale-400` 派生を削除し、生成スケールを 100 / 125 / 150 / 200 に変更（#83）。400% スケーリングは実運用でほぼ存在せず、サイドロード配布のため Store 要件も適用されない。パッケージ内アセットは約 4.9MB から 3.8MB に減少
+- Asset: `Generate-MsixAssets.ps1` が生成前に既存 PNG を削除するよう変更（#80）。命名規則を変更しても旧世代のファイルが取り残されない。あわせて生成対象から漏れていた `targetsize-32`（Explorer / Alt+Tab の標準サイズ）を生成リストに追加した
+- App: `Package.appxmanifest` の `Version` を現行リリースに合わせ `0.1.3.0` へ更新（#83）。CI はタグから置換するため配布物には影響しないが、ローカルビルド時の乖離を解消する
+
+### Fixed
+
+- App: ウィンドウのタイトルバー・Alt+Tab アイコンが既定のシステムアイコンのままだった問題を修正（#79）。WinUI 3 は `<ApplicationIcon>` で exe に埋め込んだアイコンをウィンドウへ適用しないため `AppWindow.SetIcon` を明示的に呼び出す。あわせて `Assets` に `CopyToOutputDirectory` を指定し、unpackaged 実行でもパスが解決できるようにした
+- Asset: 100% DPI 環境で意図しない古い画像が表示されていた問題を修正（#80）。現行の生成スクリプトが出力しない `*.scale-100.png` が旧世代のまま残存しており、Windows のリソース解決では非修飾版よりも修飾子つきが優先されるため、最も一般的な DPI 環境で古いアイコンが使われていた
+
 ## [0.1.3] - 2026-07-25
 
 Windows パッケージアセットの各種解像度対応とビルドツールの更新を含むパッチリリース。

@@ -38,6 +38,9 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         Title = "TachoGraphStudio";
+        // WinUI 3 は ApplicationIcon で exe に埋め込んだアイコンをウィンドウへ適用しないため、
+        // タイトルバー・Alt+Tab 用に明示設定する（#79）
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico"));
 
         string localCacheFolderPath = ApplicationData.Current.LocalCacheFolder.Path;
         string localFolderPath = ApplicationData.Current.LocalFolder.Path;

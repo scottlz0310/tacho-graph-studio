@@ -8,7 +8,7 @@
   <Identity
     Name="TachoGraphStudio"
     Publisher="CN=scottlz0310"
-    Version="0.1.0.0" />
+    Version="0.1.3.0" />
 
   <Properties>
     <DisplayName>TachoGraphStudio</DisplayName>
@@ -32,7 +32,19 @@
         BackgroundColor="#2a1250"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          ShortName="TachoGraph">
+          <uap:ShowNameOnTiles>
+            <uap:ShowOn Tile="square150x150Logo" />
+            <uap:ShowOn Tile="wide310x150Logo" />
+            <uap:ShowOn Tile="square310x310Logo" />
+          </uap:ShowNameOnTiles>
+        </uap:DefaultTile>
+        <!-- OS はこの splash を描画しない（WinUI 3 デスクトップアプリのため / #81）。
+             WinUIEx の SimpleSplashScreen がこの定義を読んで自前で表示する -->
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
     </Application>
