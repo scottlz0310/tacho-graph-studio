@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 
@@ -13,12 +15,9 @@ public static class Program
     [STAThread]
     private static void Main()
     {
-        // MSIX の uap:SplashScreen は WinUI 3 デスクトップアプリでは OS が描画しない（#81）。
-        // Application.Start より前に Win32 レイヤードウィンドウで表示することで、
-        // WinUI ランタイム初期化中の無表示区間も splash で覆う。
-        SimpleSplashScreen splashScreen = SimpleSplashScreen.ShowDefaultSplashScreen();
-
         WinRT.ComWrappersSupport.InitializeComWrappers();
+
+        SimpleSplashScreen? splashScreen = TryShowSplashScreen();
 
         Application.Start(_ =>
         {
@@ -26,5 +25,25 @@ public static class Program
             SynchronizationContext.SetSynchronizationContext(context);
             new App(splashScreen);
         });
+    }
+
+    /// <summary>
+    /// MSIX の uap:SplashScreen は WinUI 3 デスクトップアプリでは OS が描画しない（#81）。
+    /// Application.Start より前に Win32 レイヤードウィンドウで表示することで、
+    /// WinUI ランタイム初期化中の無表示区間も splash で覆う。
+    /// </summary>
+    private static SimpleSplashScreen? TryShowSplashScreen()
+    {
+        // splash は装飾であり、マニフェストの画像を解決できないだけでアプリを起動不能に
+        // してはならない。XAML 初期化前で UI もロガーも使えないため Debug 出力に留める
+        try
+        {
+            return SimpleSplashScreen.ShowDefaultSplashScreen();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"splash の表示に失敗したため splash なしで起動します: {ex.Message}");
+            return null;
+        }
     }
 }

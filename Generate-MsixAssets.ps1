@@ -110,6 +110,12 @@ if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
 
+# System.Drawing の Save() は相対パスを .NET の CurrentDirectory で解決するが、
+# PowerShell の Set-Location はこれを同期しない。一方で下の削除処理は PowerShell の
+# 位置基準で走るため、絶対パス化しないと「削除だけ正しい場所で実行され、生成物は
+# 別の場所へ書かれる（または書き込み失敗）」という破壊的な不整合になる
+$OutputDir = (Resolve-Path $OutputDir).Path
+
 # 旧世代の生成物を除去する。app.ico は本スクリプトの生成対象外なので残す。
 $stale = Get-ChildItem -Path $OutputDir -Filter "*.png" -File
 if ($stale) {
