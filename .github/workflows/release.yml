@@ -33,9 +33,12 @@ jobs:
         shell: pwsh
         run: |
           $path = "src/TachoGraphStudio.App/Package.appxmanifest"
-          $content = Get-Content $path -Raw
-          $content = $content -replace '(<Identity\b[^>]*?\bVersion=")[^"]+"', ('${1}' + "${{ steps.version.outputs.version }}" + '"')
-          Set-Content $path $content -NoNewline
+          $ver = "${{ steps.version.outputs.version }}"
+          (Get-Content $path) | ForEach-Object {
+            if ($_ -match '^\s*Version=') {
+              $_ -replace 'Version="[^"]+"', ('Version="' + $ver + '"')
+            } else { $_ }
+          } | Set-Content $path
 
       - name: Restore signing certificate
         shell: pwsh
