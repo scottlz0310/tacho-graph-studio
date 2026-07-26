@@ -191,13 +191,15 @@ public sealed class SheetSplitterTests
         }
     }
 
-    // 円盤は正円なので、規格径に収まっていても細長い塊は除外する
+    // 円盤は正円なので、規格径に収まっていても縦横比が外れた塊は除外する。
+    // 矩形は 255x225 で両辺とも採用範囲(Dpi=50 では 217〜270px)に入るため、
+    // サイズ判定では落ちず縦横比(1.133 > 1.10)だけが除外理由になる
     [Fact]
     public void Split_ExcludesNonCircularRegion()
     {
         using Mat raw = new(600, 900, MatType.CV_8UC3, Scalar.All(255));
         Cv2.Circle(raw, new Point(250, 300), StandardRadius, DiscGray, thickness: -1);
-        Cv2.Rectangle(raw, new Rect(600, 180, 240, 30), DiscGray, thickness: -1);
+        Cv2.Rectangle(raw, new Rect(600, 180, 255, 225), DiscGray, thickness: -1);
         SheetImage sheet = Encode(raw);
 
         List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
