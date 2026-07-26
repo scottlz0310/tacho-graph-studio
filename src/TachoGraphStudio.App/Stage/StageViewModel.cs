@@ -434,7 +434,8 @@ public sealed partial class StageViewModel : ObservableObject
         return $"画像ファイル {imageCount} 件が含まれています。画像は解像度情報を持たないため"
             + "チャート紙の実寸法を推定できず、規格サイズ（Task-Meter 125mm / Yazaki 123mm）に"
             + "もとづく円盤の検出と切り出しが働きません。円盤を検出できなかったり、"
-            + "切り出し位置がずれる場合があります。PDF で取り込み直すと精度が安定します。";
+            + "円盤の内側の印刷を別の円盤として誤検出したり、切り出し位置がずれる場合があります。"
+            + "PDF で取り込み直すと精度が安定します。";
     }
 
     public async Task ImportAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
