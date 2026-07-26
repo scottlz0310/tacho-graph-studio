@@ -75,6 +75,73 @@ public sealed class SheetSplitterTests
         }
     }
 
+    // 印字が薄いと外周リングが分断され、断片が最小サイズに届かず連結成分では 1 件も
+    // 残らないことがある。Hough は勾配を見るため連結性を要求せず、この場合も検出できる(#91)
+    [Fact]
+    public void Split_FallsBackToHoughWhenContourIsBroken()
+    {
+        using Mat raw = new(600, 600, MatType.CV_8UC3, Scalar.All(255));
+        DrawBrokenRing(raw, new Point(300, 300), StandardRadius);
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            Assert.Equal(FixedCropSize, disc.RegionInSheet.Width);
+
+            // 検出された中心が円弧の中心と一致する
+            int cropCenterX = disc.RegionInSheet.X + (disc.RegionInSheet.Width / 2);
+            int cropCenterY = disc.RegionInSheet.Y + (disc.RegionInSheet.Height / 2);
+            Assert.InRange(cropCenterX, 295, 305);
+            Assert.InRange(cropCenterY, 295, 305);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    // 通常の円盤と輪郭が分断された円盤が同一シートに混在するケース。連結成分だけでは
+    // 分断された方が例外もなく欠落するため、Hough の結果を重複排除して統合する(#91)
+    [Fact]
+    public void Split_CompletesMissingDiscWhenOnlySomeContoursAreBroken()
+    {
+        using Mat raw = new(500, 900, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(raw, new Point(200, 250), StandardRadius, DiscGray, thickness: -1);
+        DrawBrokenRing(raw, new Point(650, 250), StandardRadius);
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            Assert.Equal(2, discs.Count);
+            Assert.Contains(discs, disc => disc.RegionInSheet.Contains(new Point(200, 250)));
+            Assert.Contains(discs, disc => disc.RegionInSheet.Contains(new Point(650, 250)));
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    // 通常の円盤が Hough でも検出されるため、重複排除が効かないと同じ円盤が 2 件になる
+    [Fact]
+    public void Split_DoesNotDuplicateDiscDetectedByBothPaths()
+    {
+        SheetImage sheet = BuildSheet(600, 600, [(300, 300, StandardRadius)]);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            Assert.Single(discs);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
     // 実運用では Task-Meter(125mm)と Yazaki(123mm)が混在する(#91)
     [Fact]
     public void Split_DetectsBothPaperStandards()
@@ -490,6 +557,23 @@ public sealed class SheetSplitterTests
         }
 
         return Encode(sheet);
+    }
+
+    // 20 度の円弧を 30 度おきに描き、どの連結成分も最小サイズに届かないようにする
+    private static void DrawBrokenRing(Mat sheet, Point center, int radius)
+    {
+        for (int angle = 0; angle < 360; angle += 30)
+        {
+            Cv2.Ellipse(
+                sheet,
+                center,
+                new Size(radius, radius),
+                angle: 0,
+                startAngle: angle,
+                endAngle: angle + 20,
+                DiscGray,
+                thickness: 3);
+        }
     }
 
     private static SheetImage Encode(Mat sheet)
