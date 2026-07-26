@@ -84,10 +84,19 @@ public sealed class SheetSplitter
         {
             for (int index = 0; index < candidates.Count; index++)
             {
+                Candidate candidate = candidates[index];
                 (Mat cropped, Rect region) = cropSizePx is { } size
-                    ? CropFixedSize(pixels, candidates[index], scaleX, scaleY, size)
-                    : CropBoundingBox(pixels, candidates[index], scaleX, scaleY, options.PaddingPx);
-                discs.Add(new DiscImage(cropped, index, region, sheet.SourcePath, sheet.PageIndex));
+                    ? CropFixedSize(pixels, candidate, scaleX, scaleY, size)
+                    : CropBoundingBox(pixels, candidate, scaleX, scaleY, options.PaddingPx);
+
+                // 解析スケールの幾何情報を切り出し画像の座標系へ移す
+                Point2f discCenter = new(
+                    (float)((candidate.Center.X / scaleX) - region.X),
+                    (float)((candidate.Center.Y / scaleY) - region.Y));
+                float discDiameter = (float)(candidate.Diameter / ((scaleX + scaleY) / 2.0));
+
+                discs.Add(new DiscImage(
+                    cropped, index, region, sheet.SourcePath, sheet.PageIndex, discCenter, discDiameter));
             }
         }
         catch
@@ -199,32 +208,33 @@ public sealed class SheetSplitter
             int fullHeight = (int)(height / scaleY);
             if (sizeRange.Contains(fullWidth) && sizeRange.Contains(fullHeight) && IsCircular(width, height))
             {
-                // 中心は固定サイズ切り出しでしか使わない。DPI 不明時は算出を省く
-                Point2f center = cropInAnalysis is { } crop
-                    ? DetectCenter(labels, label, left, top, width, height, crop)
-                    : new Point2f(left + (width / 2f), top + (height / 2f));
-                candidates.Add(new Candidate(left, top, width, height, area, center));
+                (Point2f center, float diameter) = DetectGeometry(
+                    labels, label, left, top, width, height, cropInAnalysis);
+                candidates.Add(new Candidate(left, top, width, height, area, center, diameter));
             }
         }
 
         return candidates;
     }
 
-    // 外周輪郭への楕円フィットで中心を求める。しきい値を振ったときのブレは実測で
-    // bbox 中心の 1/10 以下だった。ただし線画の円盤では稀にフィットが外れるため、
+    // 外周輪郭への楕円フィットで中心と直径を求める。しきい値を振ったときの中心のブレは
+    // 実測で bbox 中心の 1/10 以下だった。ただし線画の円盤では稀にフィットが外れるため、
     // 採用可否は「その中心で検出領域が切り出しに収まるか」で判定する(#91)。
     // 切り出しの余白は片側 1mm しかなく、経験的な許容割合では円盤の外周を
-    // 切り落とす中心を通してしまうため、余白そのものを基準にする
-    private static Point2f DetectCenter(
+    // 切り落とす中心を通してしまうため、余白そのものを基準にする。
+    // 直径は背景除去のアルファ円マスクに使う。突起があると bbox は広がるが
+    // 楕円フィットは引きずられにくいため、採用時はフィット結果を使う
+    private static (Point2f Center, float Diameter) DetectGeometry(
         Mat labels,
         int label,
         int left,
         int top,
         int width,
         int height,
-        Size2f cropInAnalysis)
+        Size2f? cropInAnalysis)
     {
         Point2f boundingBoxCenter = new(left + (width / 2f), top + (height / 2f));
+        float boundingBoxDiameter = (width + height) / 2f;
 
         using Mat component = new();
         Cv2.Compare(labels, label, component, CmpTypes.EQ);
@@ -238,21 +248,30 @@ public sealed class SheetSplitter
         Point[]? outer = contours.MaxBy(contour => Cv2.ContourArea(contour));
         if (outer is not { Length: >= MinContourPoints })
         {
-            return boundingBoxCenter;
+            return (boundingBoxCenter, boundingBoxDiameter);
         }
 
-        Point2f fitted = Cv2.FitEllipse(outer).Center;
-        float halfWidth = cropInAnalysis.Width / 2f;
-        float halfHeight = cropInAnalysis.Height / 2f;
+        RotatedRect fitted = Cv2.FitEllipse(outer);
+        if (cropInAnalysis is not { } crop)
+        {
+            // DPI 不明時は固定サイズ切り出しを行わないため収まり判定もできない。
+            // 中心はどのみち bbox 基準の切り出しに従う
+            return (boundingBoxCenter, (fitted.Size.Width + fitted.Size.Height) / 2f);
+        }
+
+        float halfWidth = crop.Width / 2f;
+        float halfHeight = crop.Height / 2f;
         bool keepsDiscInside =
-            fitted.X - halfWidth <= left
-            && left + width <= fitted.X + halfWidth
-            && fitted.Y - halfHeight <= top
-            && top + height <= fitted.Y + halfHeight;
+            fitted.Center.X - halfWidth <= left
+            && left + width <= fitted.Center.X + halfWidth
+            && fitted.Center.Y - halfHeight <= top
+            && top + height <= fitted.Center.Y + halfHeight;
 
         // 収まらない場合は bbox 中心を採る。検出領域が切り出しより大きいときは
         // どの中心でも収まらないが、bbox 中心なら欠損が四方へ均等に分かれる
-        return keepsDiscInside ? fitted : boundingBoxCenter;
+        return keepsDiscInside
+            ? (fitted.Center, (fitted.Size.Width + fitted.Size.Height) / 2f)
+            : (boundingBoxCenter, boundingBoxDiameter);
     }
 
     // 円盤は正円なので bbox はほぼ正方形になる。細長い異物を落とすための保険
@@ -310,7 +329,8 @@ public sealed class SheetSplitter
         int Width,
         int Height,
         int Area,
-        Point2f Center);
+        Point2f Center,
+        float Diameter);
 
     // 採用する円盤サイズの範囲(フル解像度 px)。DPI 不明時は上限なし
     private readonly record struct SizeRange(int Min, int? Max)

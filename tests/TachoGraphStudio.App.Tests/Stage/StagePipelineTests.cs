@@ -90,27 +90,10 @@ public sealed class StagePipelineTests : IDisposable
         Assert.Equal([0, 1, 0, 1], discs.Select(disc => disc.IndexInSheet));
     }
 
-    [Fact]
-    public async Task ProcessAsync_YieldsEarlierDiscsBeforeLaterFailureInSameSheet()
-    {
-        // 左の円盤(グレー225)は分割・背景除去の両方で検出でき、右の円盤(グレー250)は
-        // 分割(threshold=5)でのみ検出できる。背景除去(既定 threshold=15)は右の円盤で失敗する
-        using Mat sheet = new(700, 1000, MatType.CV_8UC3, Scalar.All(255));
-        Cv2.Circle(sheet, new Point(250, 350), 120, Scalar.All(225), thickness: -1);
-        Cv2.Circle(sheet, new Point(700, 350), 120, Scalar.All(250), thickness: -1);
-        Cv2.ImEncode(".png", sheet, out byte[] pageBytes);
-        string path = Path.Combine(_temporaryDirectory, "partial.pdf");
-        File.WriteAllBytes(path, [0x25, 0x50, 0x44, 0x46]);
-        StagePipeline pipeline = new(
-            new SheetLoader(new FakePdfRasterizer(pageBytes, pageCount: 1)),
-            pdfSplitOptions: new DiscSplitOptions { Dpi = 50.0, Threshold = 5 });
-
-        await using IAsyncEnumerator<ProcessedDisc> discs = pipeline.ProcessAsync([path]).GetAsyncEnumerator();
-
-        Assert.True(await discs.MoveNextAsync());
-        Assert.Equal(0, discs.Current.IndexInSheet);
-        await Assert.ThrowsAsync<BackgroundRemovalException>(async () => await discs.MoveNextAsync());
-    }
+    // ProcessAsync_YieldsEarlierDiscsBeforeLaterFailureInSameSheet は削除した。
+    // 背景除去が前景判定をやめ分割時の検出結果を使うようになったため(#91)、
+    // 分割に成功した円盤が背景除去で失敗する経路がなくなり、このテストが依存していた
+    // 「シート内の後続円盤だけが失敗する」状況を合成できなくなったため
 
     public void Dispose()
     {
