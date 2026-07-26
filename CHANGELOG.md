@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-26
+
+アイコンとスプラッシュを刷新し、Windows のライト/ダークテーマに追従するようにしたパッチリリース。
+
 ### Added
 
 - App: ライト/ダークテーマに応じたアイコン・スプラッシュの切り替えを追加（#88）。タスクバーの実寸アイコンは `altform-lightunplated` 派生を生成し、OS がリソース修飾子で切り替える。スプラッシュは MRT のリソース修飾子に theme が存在しないためテーマごとに別名で出力し（`SplashScreen` / `SplashScreenLight`）、起動時に `AppsUseLightTheme` とシステム DPI から選んで `SimpleSplashScreen.ShowSplashScreenImage` へ渡す。`ShowSplashScreenImage` は渡されたファイルをそのまま読み scale 解決を行わないため、倍率の選択もアプリ側で行う。解決に失敗した場合はマニフェスト定義（ダーク）を表示する従来動作にフォールバックする
