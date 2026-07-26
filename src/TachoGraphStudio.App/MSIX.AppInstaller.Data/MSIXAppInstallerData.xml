@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  App Installer のカスタム UX（#92）。フォルダ名・ファイル名は大文字小文字を含めて
+  この綴りである必要がある（ドキュメント本文と Troubleshooting 節で表記が揺れているが、
+  Troubleshooting 節の MSIX.AppInstaller.Data / MSIXAppInstallerData.xml に合わせる）。
+
+  BackgroundColor は設定しない。App Installer には文字色を指定する要素がなく、
+  暗い背景を指定すると文字が読めなくなる恐れがあるため、既定（OS のテーマ準拠）に任せる。
+
+  Icon の Logo は MRT のリソース修飾子を参照せず、指定パスの 1 枚を全 DPI で
+  リサイズする。このため scale 修飾子のない InstallerLogo.png を単独で用意している。
+  App Installer はライト/ダークテーマでロゴを出し分けないため、明暗どちらの背景でも
+  成立するよう自前の背景（シアンのグローと帯）を持つ意匠にしてある。
+-->
+<AppInstallerUX
+    xmlns="http://schemas.microsoft.com/msix/appinstallerux"
+    xmlns:ux="http://schemas.microsoft.com/msix/appinstallerux"
+    xmlns:ux2="http://schemas.microsoft.com/msix/appinstallerux/2"
+    IgnorableNamespaces="ux ux2"
+    Version="1.0.0">
+
+  <UX AccentColor="#2a1250" FontFamily="Segoe UI" AppNameInTitle="true">
+    <Icon HorizontalAlignment="center" Logo="Assets\InstallerLogo.png" />
+  </UX>
+
+</AppInstallerUX>

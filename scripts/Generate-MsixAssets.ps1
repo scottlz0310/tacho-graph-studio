@@ -27,6 +27,7 @@ param(
     [string]$SourceIconLight = (Join-Path $PSScriptRoot "..\assets-source\icon-light.png"),
     [string]$SourceSplashDark = (Join-Path $PSScriptRoot "..\assets-source\splash-dark.png"),
     [string]$SourceSplashLight = (Join-Path $PSScriptRoot "..\assets-source\splash-light.png"),
+    [string]$SourceInstallerLogo = (Join-Path $PSScriptRoot "..\assets-source\installer-logo.png"),
     [string]$OutputDir = (Join-Path $PSScriptRoot "..\src\TachoGraphStudio.App\Assets")
 )
 
@@ -37,6 +38,11 @@ Add-Type -AssemblyName System.Drawing
 # app.ico に収める実寸。Windows はタイトルバー・Alt+Tab・エクスプローラーで
 # これらのサイズを直接参照する
 $IcoSizes = @(16, 24, 32, 48, 64, 128, 256)
+
+# App Installer のカスタム UX 用ロゴの一辺（#92）。App Installer は MRT の
+# リソース修飾子を参照せず、指定パスの 1 枚を全 DPI でリサイズするため、
+# 修飾子なしの高解像度を 1 枚だけ出す
+$InstallerLogoSize = 400
 
 function Resize-ImageHighQuality {
     param(
@@ -124,6 +130,59 @@ function Save-TargetSizeAsset {
     }
 }
 
+# 不透明な内容の外接矩形を求める。原画は周囲に余白を持つため、そのまま正方形へ
+# 収めるとロゴが小さくなる
+function Get-ContentBounds {
+    param([System.Drawing.Bitmap]$Image, [int]$AlphaThreshold = 10)
+
+    $minX = $Image.Width; $maxX = -1; $minY = $Image.Height; $maxY = -1
+    for ($y = 0; $y -lt $Image.Height; $y++) {
+        for ($x = 0; $x -lt $Image.Width; $x++) {
+            if ($Image.GetPixel($x, $y).A -gt $AlphaThreshold) {
+                if ($x -lt $minX) { $minX = $x }
+                if ($x -gt $maxX) { $maxX = $x }
+                if ($y -lt $minY) { $minY = $y }
+                if ($y -gt $maxY) { $maxY = $y }
+            }
+        }
+    }
+
+    if ($maxX -lt 0) { throw "不透明な画素がありません" }
+
+    return New-Object System.Drawing.Rectangle($minX, $minY, ($maxX - $minX + 1), ($maxY - $minY + 1))
+}
+
+# 内容へ切り詰めたうえで、縦横比を保ったまま正方形キャンバスの中央へ収める。
+# App Installer は正方形前提でリサイズするため、非正方形のまま渡すと円が歪む（#92）
+function Save-SquareLogo {
+    param(
+        [System.Drawing.Bitmap]$SourceImage,
+        [string]$OutputPath,
+        [int]$Size
+    )
+
+    $bounds = Get-ContentBounds -Image $SourceImage
+    $cropped = $SourceImage.Clone($bounds, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+
+    $scale = [math]::Min($Size / $cropped.Width, $Size / $cropped.Height)
+    $width = [math]::Max(1, [int][math]::Round($cropped.Width * $scale))
+    $height = [math]::Max(1, [int][math]::Round($cropped.Height * $scale))
+    $resized = Resize-ImageHighQuality -Image $cropped -Width $width -Height $height
+
+    $canvas = New-Object System.Drawing.Bitmap($Size, $Size)
+    $graphics = [System.Drawing.Graphics]::FromImage($canvas)
+    $graphics.Clear([System.Drawing.Color]::Transparent)
+    $graphics.DrawImage($resized, [int](($Size - $width) / 2), [int](($Size - $height) / 2), $width, $height)
+    $graphics.Dispose()
+
+    $canvas.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    Write-Host "  生成: $(Split-Path $OutputPath -Leaf) ($Size x $Size、内容 $width x $height)"
+
+    $canvas.Dispose()
+    $resized.Dispose()
+    $cropped.Dispose()
+}
+
 function Save-IconFile {
     param(
         [System.Drawing.Image]$SourceImage,
@@ -184,7 +243,8 @@ function Save-IconFile {
 Write-Host "MSIX アセット生成を開始します"
 Write-Host ""
 
-foreach ($source in @($SourceIconDark, $SourceIconLight, $SourceSplashDark, $SourceSplashLight)) {
+foreach ($source in @(
+        $SourceIconDark, $SourceIconLight, $SourceSplashDark, $SourceSplashLight, $SourceInstallerLogo)) {
     if (-not (Test-Path $source)) { throw "原画が見つかりません: $source" }
 }
 
@@ -210,6 +270,7 @@ $iconDark = [System.Drawing.Image]::FromFile((Resolve-Path $SourceIconDark))
 $iconLight = [System.Drawing.Image]::FromFile((Resolve-Path $SourceIconLight))
 $splashDark = [System.Drawing.Image]::FromFile((Resolve-Path $SourceSplashDark))
 $splashLight = [System.Drawing.Image]::FromFile((Resolve-Path $SourceSplashLight))
+$installerLogo = [System.Drawing.Bitmap]::FromFile((Resolve-Path $SourceInstallerLogo))
 
 Write-Host "原画:"
 Write-Host "  アイコン(dark): $($iconDark.Width)x$($iconDark.Height)"
@@ -263,11 +324,18 @@ try {
     Write-Host "app.ico を生成しています"
     Save-IconFile -SourceImage $iconDark -OutputPath (Join-Path $OutputDir "app.ico") -Sizes $IcoSizes
     Write-Host ""
+
+    # App Installer のカスタム UX 用（#92）。MSIXAppInstallerData.xml から参照する
+    Write-Host "InstallerLogo を生成しています"
+    Save-SquareLogo -SourceImage $installerLogo `
+        -OutputPath (Join-Path $OutputDir "InstallerLogo.png") -Size $InstallerLogoSize
+    Write-Host ""
 } finally {
     $iconDark.Dispose()
     $iconLight.Dispose()
     $splashDark.Dispose()
     $splashLight.Dispose()
+    $installerLogo.Dispose()
 }
 
 $pngCount = (Get-ChildItem -Path $OutputDir -Filter "*.png" -File | Measure-Object).Count
