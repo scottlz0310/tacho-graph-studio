@@ -466,6 +466,29 @@ public sealed class SheetSplitterTests
         }
     }
 
+    // 円盤の内側の印刷リングが独立した候補として残る。DPI 既知なら規格径の上限で
+    // 落ちるが、DPI 不明時は最小サイズしか課せないため入れ子判定で除外する(#91)
+    [Fact]
+    public void Split_ExcludesNestedCandidateWithoutDpi()
+    {
+        using Mat raw = new(1400, 1400, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(raw, new Point(700, 700), 650, DiscGray, thickness: 3);
+        // 内側のリングも単独では最小サイズ 1000px を満たしてしまう
+        Cv2.Circle(raw, new Point(700, 700), 501, DiscGray, thickness: 3);
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = null })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            Assert.True(disc.RegionInSheet.Width > 1200, $"外側の円盤が採用されていません: {disc.RegionInSheet}");
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(2000.0)]

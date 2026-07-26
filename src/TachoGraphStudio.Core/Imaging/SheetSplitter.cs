@@ -79,6 +79,7 @@ public sealed class SheetSplitter
         // 1 枚も取れないケースに限らず、通常の円盤と薄い円盤が混在するシートでは
         // 薄い方だけが例外もなく欠落するため、常に実行して差分を足す
         MergeHoughCandidates(candidates, analysis, scaleX, scaleY, options.Dpi);
+        candidates = RemoveNestedCandidates(candidates);
 
         if (candidates.Count == 0)
         {
@@ -184,6 +185,43 @@ public sealed class SheetSplitter
             }
         }
     }
+
+    // 円盤の内側にある印刷リングが独立した候補として残ることがある。DPI が既知なら
+    // 規格径の上限で落ちるが、DPI 不明時は最小サイズしか課せないため通ってしまう
+    // (実測では A4 単票で直径 2967px の円盤に加え 1911px の内側リングを検出した)。
+    // 円盤同士は重ならないので、他の候補に完全に含まれる領域は円盤ではない(#91)
+    private static List<Candidate> RemoveNestedCandidates(List<Candidate> candidates)
+    {
+        List<Candidate> result = [];
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            bool nested = false;
+            for (int other = 0; other < candidates.Count; other++)
+            {
+                if (other != index && ContainsCandidate(candidates[other], candidates[index]))
+                {
+                    nested = true;
+                    break;
+                }
+            }
+
+            if (!nested)
+            {
+                result.Add(candidates[index]);
+            }
+        }
+
+        return result;
+    }
+
+    // 完全に含まれ、かつ少なくとも一辺が小さいこと。同一サイズの候補が互いを
+    // 消し合わないようにする
+    private static bool ContainsCandidate(Candidate outer, Candidate inner)
+        => outer.Left <= inner.Left
+        && outer.Top <= inner.Top
+        && inner.Left + inner.Width <= outer.Left + outer.Width
+        && inner.Top + inner.Height <= outer.Top + outer.Height
+        && (outer.Width > inner.Width || outer.Height > inner.Height);
 
     // 円盤同士は重ならないため、中心が直径の半分より近ければ同じ円盤とみなせる
     private static bool IsSameDisc(Candidate left, Candidate right)

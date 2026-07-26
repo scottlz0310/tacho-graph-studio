@@ -75,6 +75,11 @@ public sealed partial class StageViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasTemplateWarning))]
     public partial string? TemplateWarning { get; set; }
 
+    // PDF 以外を取り込んだときの注意喚起(#91)。エラーではなく精度の話なので Warning 扱い
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasImportWarning))]
+    public partial string? ImportWarning { get; set; }
+
     // トップバーのテンプレート選択 ComboBox 用。実テンプレートに加え、末尾に
     // TemplateEditEntry.Instance(「テンプレート登録・編集」導線)を含む(#43)
     public ObservableCollection<object> TemplateSelectionItems { get; } = [];
@@ -104,6 +109,8 @@ public sealed partial class StageViewModel : ObservableObject
     public bool IsImportEnabled => !IsImporting;
 
     public bool HasImportError => ImportError is not null;
+
+    public bool HasImportWarning => ImportWarning is not null;
 
     public bool HasSelectedDisc => SelectedDisc is not null;
 
@@ -412,6 +419,25 @@ public sealed partial class StageViewModel : ObservableObject
         }
     }
 
+    // PDF はラスタライズ DPI が既知だが、画像ファイルは解像度情報を持たないため
+    // 実寸法を推定できない。規格径にもとづく検出・固定サイズ切り出し・Hough 補完の
+    // いずれも働かないため、PDF で取り込み直す判断ができるよう取込開始時に知らせる(#91)
+    private static string? BuildResolutionWarning(IReadOnlyList<string> paths)
+    {
+        int imageCount = paths.Count(path =>
+            !Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase));
+        if (imageCount == 0)
+        {
+            return null;
+        }
+
+        return $"画像ファイル {imageCount} 件が含まれています。画像は解像度情報を持たないため"
+            + "チャート紙の実寸法を推定できず、規格サイズ（Task-Meter 125mm / Yazaki 123mm）に"
+            + "もとづく円盤の検出と切り出しが働きません。円盤を検出できなかったり、"
+            + "円盤の内側の印刷を別の円盤として誤検出したり、切り出し位置がずれる場合があります。"
+            + "PDF で取り込み直すと精度が安定します。";
+    }
+
     public async Task ImportAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(paths);
@@ -425,6 +451,7 @@ public sealed partial class StageViewModel : ObservableObject
 
         IsImporting = true;
         ImportError = null;
+        ImportWarning = BuildResolutionWarning(paths);
         SelectedDisc = null;
         Discs.Clear();
         IsEmptyStateVisible = false;

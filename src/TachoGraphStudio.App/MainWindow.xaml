@@ -279,13 +279,22 @@
                         Content="設定"
                         ToolTipService.ToolTip="Supabase 接続設定を開く" />
                 </StackPanel>
-                <InfoBar
-                    Grid.Row="1"
-                    IsClosable="True"
-                    IsOpen="{x:Bind StageViewModel.HasImportError, Mode=OneWay}"
-                    Message="{x:Bind StageViewModel.ImportError, Mode=OneWay}"
-                    Severity="Error"
-                    Title="シート取込に失敗しました" />
+                <StackPanel Grid.Row="1" Spacing="8">
+                    <InfoBar
+                        IsClosable="True"
+                        IsOpen="{x:Bind StageViewModel.HasImportError, Mode=OneWay}"
+                        Message="{x:Bind StageViewModel.ImportError, Mode=OneWay}"
+                        Severity="Error"
+                        Title="シート取込に失敗しました" />
+                    <!-- 画像ファイルは解像度情報を持たず実寸法を推定できないため、
+                         PDF で取り込み直す判断ができるよう知らせる(#91) -->
+                    <InfoBar
+                        IsClosable="True"
+                        IsOpen="{x:Bind StageViewModel.HasImportWarning, Mode=OneWay}"
+                        Message="{x:Bind StageViewModel.ImportWarning, Mode=OneWay}"
+                        Severity="Warning"
+                        Title="PDF での取り込みを推奨します" />
+                </StackPanel>
                 <!-- 左: 縦サムネイル / 中央: プレビュー / 右: 回転補正レール (#53) -->
                 <Grid
                     Grid.Row="2"
