@@ -90,26 +90,44 @@ public sealed class StagePipelineTests : IDisposable
         Assert.Equal([0, 1, 0, 1], discs.Select(disc => disc.IndexInSheet));
     }
 
+    // #29 で blocking になったストリーミング契約の回帰。同一シートの後続円盤の処理が
+    // 失敗しても、先行して変換できた円盤は呼び出し元へ届いていなければならない。
+    // 背景除去が前景判定をやめた(#91)ことで自然に失敗する入力を作れなくなったため、
+    // 2 件目だけ失敗する fake を注入して契約を固定する
     [Fact]
     public async Task ProcessAsync_YieldsEarlierDiscsBeforeLaterFailureInSameSheet()
     {
-        // 左の円盤(グレー225)は分割・背景除去の両方で検出でき、右の円盤(グレー250)は
-        // 分割(threshold=5)でのみ検出できる。背景除去(既定 threshold=15)は右の円盤で失敗する
-        using Mat sheet = new(700, 1000, MatType.CV_8UC3, Scalar.All(255));
-        Cv2.Circle(sheet, new Point(250, 350), 120, Scalar.All(225), thickness: -1);
-        Cv2.Circle(sheet, new Point(700, 350), 120, Scalar.All(250), thickness: -1);
+        using Mat sheet = BuildSheet(discCount: 2);
         Cv2.ImEncode(".png", sheet, out byte[] pageBytes);
         string path = Path.Combine(_temporaryDirectory, "partial.pdf");
         File.WriteAllBytes(path, [0x25, 0x50, 0x44, 0x46]);
         StagePipeline pipeline = new(
             new SheetLoader(new FakePdfRasterizer(pageBytes, pageCount: 1)),
-            pdfSplitOptions: new DiscSplitOptions { Dpi = 50.0, Threshold = 5 });
+            pdfSplitOptions: TestSplitOptions,
+            remover: new FailAfterFirstDiscRemover());
 
         await using IAsyncEnumerator<ProcessedDisc> discs = pipeline.ProcessAsync([path]).GetAsyncEnumerator();
 
         Assert.True(await discs.MoveNextAsync());
         Assert.Equal(0, discs.Current.IndexInSheet);
         await Assert.ThrowsAsync<BackgroundRemovalException>(async () => await discs.MoveNextAsync());
+    }
+
+    // 1 枚目だけ通し、2 枚目以降は失敗する
+    private sealed class FailAfterFirstDiscRemover : IBackgroundRemover
+    {
+        private readonly BackgroundRemover _inner = new();
+        private int _calls;
+
+        public BackgroundRemovalResult Remove(DiscImage disc, BackgroundRemovalOptions? options = null)
+        {
+            if (_calls++ > 0)
+            {
+                throw new BackgroundRemovalException("テスト用の失敗");
+            }
+
+            return _inner.Remove(disc, options);
+        }
     }
 
     public void Dispose()
