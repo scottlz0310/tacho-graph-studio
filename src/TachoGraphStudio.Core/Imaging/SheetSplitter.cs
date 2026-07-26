@@ -74,12 +74,11 @@ public sealed class SheetSplitter
             cropSizePx is { } cropPx ? new Size2f((float)(cropPx * scaleX), (float)(cropPx * scaleY)) : null);
 
         // 連結成分は円盤の輪郭が途切れず繋がっていることを前提にする。印字が薄いと
-        // 外周リングが分断され、断片が最小サイズに届かず 1 件も残らないことがある。
-        // Hough は勾配を見るため連結性を要求しないので代替経路として使う(#91)
-        if (candidates.Count == 0)
-        {
-            candidates = FindCandidatesByHough(analysis, scaleX, scaleY, options.Dpi);
-        }
+        // 外周リングが分断され、断片が最小サイズに届かず候補に残らない。Hough は
+        // 勾配を見るため連結性を要求しないので、取りこぼしを補完する(#91)。
+        // 1 枚も取れないケースに限らず、通常の円盤と薄い円盤が混在するシートでは
+        // 薄い方だけが例外もなく欠落するため、常に実行して差分を足す
+        MergeHoughCandidates(candidates, analysis, scaleX, scaleY, options.Dpi);
 
         if (candidates.Count == 0)
         {
@@ -168,9 +167,36 @@ public sealed class SheetSplitter
         return analysis;
     }
 
-    // 連結成分で 1 件も取れなかったときの代替経路。円盤は直径が規格で固定されているため
-    // 半径の探索範囲を厳しく絞れる。範囲を緩めると誤検出が激増する(実測で 5 枚のシートに
-    // 対し 15 個検出)ので、DPI が既知で規格径を計算できる場合にのみ使う(#91)
+    // Hough で検出した円のうち、連結成分側に対応する候補が無いものを追加する。
+    // 連結成分の方が輪郭全体を使うぶん位置精度が高いので、重複時は既存を優先する
+    private static void MergeHoughCandidates(
+        List<Candidate> candidates,
+        Mat analysis,
+        double scaleX,
+        double scaleY,
+        double? dpi)
+    {
+        foreach (Candidate hough in FindCandidatesByHough(analysis, scaleX, scaleY, dpi))
+        {
+            if (!candidates.Any(existing => IsSameDisc(existing, hough)))
+            {
+                candidates.Add(hough);
+            }
+        }
+    }
+
+    // 円盤同士は重ならないため、中心が直径の半分より近ければ同じ円盤とみなせる
+    private static bool IsSameDisc(Candidate left, Candidate right)
+    {
+        double dx = left.Center.X - right.Center.X;
+        double dy = left.Center.Y - right.Center.Y;
+        double limit = Math.Min(left.Diameter, right.Diameter) / 2.0;
+        return (dx * dx) + (dy * dy) < limit * limit;
+    }
+
+    // 円盤は直径が規格で固定されているため半径の探索範囲を厳しく絞れる。範囲を緩めると
+    // 誤検出が激増する(実測で 5 枚のシートに対し 15 個検出)ので、DPI が既知で規格径を
+    // 計算できる場合にのみ使う(#91)
     private static List<Candidate> FindCandidatesByHough(Mat analysis, double scaleX, double scaleY, double? dpi)
     {
         if (dpi is not (>= MinValidDpi and <= MaxValidDpi))
