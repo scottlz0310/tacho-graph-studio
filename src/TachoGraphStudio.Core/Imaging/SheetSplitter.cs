@@ -9,13 +9,19 @@ public sealed class SheetSplitter
     // 解析はこの長辺サイズまで縮小して行う(ノイズ平滑化と NFR-03 の実用速度を両立)
     private const int AnalysisMaxSize = 1200;
 
-    // タコグラフチャート紙の直径
-    private const double DiscDiameterMm = 123.5;
+    // タコグラフチャート紙の直径。実運用では 2 規格が混在する(#91 の実測で確認)
+    private const double SmallDiscDiameterMm = 123.0;
+    private const double LargeDiscDiameterMm = 125.0;
 
-    // 円盤とみなす最小サイズ = 直径の 2/3
-    private const double MinSizeRatio = 2.0 / 3.0;
+    // 規格径に対して許容する差。実測のばらつきは規格内で約 ±1mm だが、
+    // 検出しきい値によるインクのにじみで系統的に +1mm ほど大きく出る
+    private const double DiameterTolerance = 0.10;
 
-    // DPI 不明時のフォールバック(300dpi スキャン相当)
+    // 円盤は正円。スキャン誤差による縦横比のずれは実測 0.6% 以内だった
+    private const double AspectTolerance = 0.10;
+
+    // DPI 不明時のフォールバック(300dpi スキャン相当)。想定径を計算できないため
+    // 上限を課さず、従来どおり最小サイズのみで判定する
     private const int FallbackMinSizePx = 1000;
 
     private const double MinValidDpi = 50.0;
@@ -42,12 +48,12 @@ public sealed class SheetSplitter
                 $"円盤を検出できません（threshold={options.Threshold}）: {sheet.SourcePath}（{sheet.PageIndex + 1} ページ目）");
         }
 
-        int minSizePx = MinimumDiscSizePx(options.Dpi);
-        List<Candidate> candidates = FindCandidates(mask, scaleX, scaleY, minSizePx, options.MinFillRatio);
+        SizeRange sizeRange = AcceptableDiscSizePx(options.Dpi);
+        List<Candidate> candidates = FindCandidates(mask, scaleX, scaleY, sizeRange);
         if (candidates.Count == 0)
         {
             throw new DiscSplitException(
-                $"最小サイズ {minSizePx}px 以上の円盤領域がありません: {sheet.SourcePath}（{sheet.PageIndex + 1} ページ目）");
+                $"{sizeRange.Describe()} の円盤領域がありません: {sheet.SourcePath}（{sheet.PageIndex + 1} ページ目）");
         }
 
         if (candidates.Count > options.MaxDiscs)
@@ -104,11 +110,6 @@ public sealed class SheetSplitter
         {
             throw new ArgumentException($"MaxDiscs は 1 以上で指定してください: {options.MaxDiscs}", nameof(options));
         }
-
-        if (options.MinFillRatio is < 0.0 or > 1.0)
-        {
-            throw new ArgumentException($"MinFillRatio は 0〜1 で指定してください: {options.MinFillRatio}", nameof(options));
-        }
     }
 
     private static Mat DecodeSheet(SheetImage sheet)
@@ -133,22 +134,29 @@ public sealed class SheetSplitter
         return ForegroundMask.Build(analysis, threshold);
     }
 
-    private static int MinimumDiscSizePx(double? dpi)
+    // DPI が既知なら規格径から採用範囲を確定する。旧実装は「直径の 2/3 以上」という
+    // 下限のみで、上限が無いためシート全体を覆う誤検出を弾けず、代わりに充填率
+    // (MinFillRatio) で除外していた。しかし白地に線画で印字されたチャート紙は
+    // 充填率が誤検出と同オーダーまで下がり分離できない(#91)。規格径は固定なので
+    // 上下限で判定する方が確実で、線画かどうかに左右されない
+    private static SizeRange AcceptableDiscSizePx(double? dpi)
     {
-        if (dpi is >= MinValidDpi and <= MaxValidDpi)
+        if (dpi is not (>= MinValidDpi and <= MaxValidDpi))
         {
-            return (int)(DiscDiameterMm / 25.4 * dpi.Value * MinSizeRatio);
+            return new SizeRange(FallbackMinSizePx, null);
         }
 
-        return FallbackMinSizePx;
+        double pxPerMm = dpi.Value / 25.4;
+        int min = (int)(SmallDiscDiameterMm * (1.0 - DiameterTolerance) * pxPerMm);
+        int max = (int)(LargeDiscDiameterMm * (1.0 + DiameterTolerance) * pxPerMm);
+        return new SizeRange(min, max);
     }
 
     private static List<Candidate> FindCandidates(
         Mat mask,
         double scaleX,
         double scaleY,
-        int minSizePx,
-        double minFillRatio)
+        SizeRange sizeRange)
     {
         using Mat labels = new();
         using Mat stats = new();
@@ -171,8 +179,7 @@ public sealed class SheetSplitter
 
             int fullWidth = (int)(width / scaleX);
             int fullHeight = (int)(height / scaleY);
-            double fillRatio = (double)area / (width * height);
-            if (fullWidth >= minSizePx && fullHeight >= minSizePx && fillRatio >= minFillRatio)
+            if (sizeRange.Contains(fullWidth) && sizeRange.Contains(fullHeight) && IsCircular(width, height))
             {
                 candidates.Add(new Candidate(left, top, width, height, area));
             }
@@ -180,6 +187,10 @@ public sealed class SheetSplitter
 
         return candidates;
     }
+
+    // 円盤は正円なので bbox はほぼ正方形になる。細長い異物を落とすための保険
+    private static bool IsCircular(int width, int height)
+        => height > 0 && Math.Abs((double)width / height - 1.0) <= AspectTolerance;
 
     private static Rect ToPaddedFullResolutionRegion(
         Candidate candidate,
@@ -198,4 +209,14 @@ public sealed class SheetSplitter
     }
 
     private readonly record struct Candidate(int Left, int Top, int Width, int Height, int Area);
+
+    // 採用する円盤サイズの範囲(フル解像度 px)。DPI 不明時は上限なし
+    private readonly record struct SizeRange(int Min, int? Max)
+    {
+        public bool Contains(int sizePx) => sizePx >= Min && (Max is null || sizePx <= Max);
+
+        public string Describe() => Max is null
+            ? $"最小サイズ {Min}px 以上"
+            : $"直径 {Min}〜{Max}px";
+    }
 }
