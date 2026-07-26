@@ -20,6 +20,18 @@ public sealed class SheetSplitter
     // 円盤は正円。スキャン誤差による縦横比のずれは実測 0.6% 以内だった
     private const double AspectTolerance = 0.10;
 
+    // 切り出しサイズ。規格径は固定なので検出サイズではなく規格値で切る(#91)。
+    // 大きい方の 125mm に片側 1mm の余白を足した値で、600dpi では 3000px ちょうどになる。
+    // 実測の中心ブレ(±0.2mm)と縦横比のずれ(0.6% ≒ 0.75mm)を吸収できる
+    private const double CropDiameterMm = 127.0;
+
+    // 楕円フィットによる中心が bbox 中心から直径のこの割合を超えて離れたら、
+    // フィットが破綻したとみなして bbox 中心を採る
+    private const double CenterAgreementRatio = 0.05;
+
+    // Cv2.FitEllipse が要求する最小輪郭点数
+    private const int MinContourPoints = 5;
+
     // DPI 不明時のフォールバック(300dpi スキャン相当)。想定径を計算できないため
     // 上限を課さず、従来どおり最小サイズのみで判定する
     private const int FallbackMinSizePx = 1000;
@@ -65,20 +77,17 @@ public sealed class SheetSplitter
             ? left.Top.CompareTo(right.Top)
             : left.Left.CompareTo(right.Left));
 
+        int? cropSizePx = FixedCropSizePx(options.Dpi);
+
         List<DiscImage> discs = [];
         try
         {
             for (int index = 0; index < candidates.Count; index++)
             {
-                Rect region = ToPaddedFullResolutionRegion(
-                    candidates[index],
-                    scaleX,
-                    scaleY,
-                    options.PaddingPx,
-                    pixels.Width,
-                    pixels.Height);
-                using Mat regionView = new(pixels, region);
-                discs.Add(new DiscImage(regionView.Clone(), index, region, sheet.SourcePath, sheet.PageIndex));
+                (Mat cropped, Rect region) = cropSizePx is { } size
+                    ? CropFixedSize(pixels, candidates[index], scaleX, scaleY, size)
+                    : CropBoundingBox(pixels, candidates[index], scaleX, scaleY, options.PaddingPx);
+                discs.Add(new DiscImage(cropped, index, region, sheet.SourcePath, sheet.PageIndex));
             }
         }
         catch
@@ -152,6 +161,14 @@ public sealed class SheetSplitter
         return new SizeRange(min, max);
     }
 
+    // DPI が既知なら規格サイズで切り出す。検出された bbox の大きさは前景判定の
+    // しきい値によるインクのにじみで ±1mm 程度ぶれるが、規格径は固定なので
+    // 検出サイズではなく規格値で切る方が出力が安定する(#91)
+    private static int? FixedCropSizePx(double? dpi)
+        => dpi is >= MinValidDpi and <= MaxValidDpi
+            ? (int)Math.Round(CropDiameterMm / 25.4 * dpi.Value)
+            : null;
+
     private static List<Candidate> FindCandidates(
         Mat mask,
         double scaleX,
@@ -181,34 +198,100 @@ public sealed class SheetSplitter
             int fullHeight = (int)(height / scaleY);
             if (sizeRange.Contains(fullWidth) && sizeRange.Contains(fullHeight) && IsCircular(width, height))
             {
-                candidates.Add(new Candidate(left, top, width, height, area));
+                Point2f center = DetectCenter(labels, label, left, top, width, height);
+                candidates.Add(new Candidate(left, top, width, height, area, center));
             }
         }
 
         return candidates;
     }
 
+    // 外周輪郭への楕円フィットで中心を求める。しきい値を振ったときのブレは実測で
+    // bbox 中心の 1/10 以下だった。ただし線画の円盤では稀にフィットが外れるため、
+    // bbox 中心から大きく離れた結果は採用しない(#91)
+    private static Point2f DetectCenter(Mat labels, int label, int left, int top, int width, int height)
+    {
+        Point2f boundingBoxCenter = new(left + (width / 2f), top + (height / 2f));
+
+        using Mat component = new();
+        Cv2.Compare(labels, label, component, CmpTypes.EQ);
+        Cv2.FindContours(
+            component,
+            out Point[][] contours,
+            out _,
+            RetrievalModes.External,
+            ContourApproximationModes.ApproxNone);
+
+        Point[]? outer = contours.MaxBy(contour => Cv2.ContourArea(contour));
+        if (outer is not { Length: >= MinContourPoints })
+        {
+            return boundingBoxCenter;
+        }
+
+        Point2f fitted = Cv2.FitEllipse(outer).Center;
+        double limit = Math.Max(width, height) * CenterAgreementRatio;
+        double deviation = Math.Sqrt(
+            Math.Pow(fitted.X - boundingBoxCenter.X, 2) + Math.Pow(fitted.Y - boundingBoxCenter.Y, 2));
+
+        return deviation <= limit ? fitted : boundingBoxCenter;
+    }
+
     // 円盤は正円なので bbox はほぼ正方形になる。細長い異物を落とすための保険
     private static bool IsCircular(int width, int height)
         => height > 0 && Math.Abs((double)width / height - 1.0) <= AspectTolerance;
 
-    private static Rect ToPaddedFullResolutionRegion(
+    // 規格サイズの正方形を中心に合わせて切り出す。シート外へはみ出す場合も切り縮めず、
+    // 不足分を白で埋めて必ず同じ寸法にする。これにより円盤は常に画像中心に来る
+    private static (Mat Cropped, Rect Region) CropFixedSize(
+        Mat sheet,
         Candidate candidate,
         double scaleX,
         double scaleY,
-        int paddingPx,
-        int sheetWidth,
-        int sheetHeight)
+        int sizePx)
+    {
+        int centerX = (int)Math.Round(candidate.Center.X / scaleX);
+        int centerY = (int)Math.Round(candidate.Center.Y / scaleY);
+        Rect region = new(centerX - (sizePx / 2), centerY - (sizePx / 2), sizePx, sizePx);
+
+        Mat cropped = new(sizePx, sizePx, sheet.Type(), Scalar.All(255));
+        Rect source = region.Intersect(new Rect(0, 0, sheet.Width, sheet.Height));
+        if (source is { Width: > 0, Height: > 0 })
+        {
+            using Mat sourceView = new(sheet, source);
+            using Mat target = new(
+                cropped,
+                new Rect(source.X - region.X, source.Y - region.Y, source.Width, source.Height));
+            sourceView.CopyTo(target);
+        }
+
+        return (cropped, region);
+    }
+
+    // DPI 不明時は規格サイズを算出できないため、従来どおり bbox にパディングを付けて切り出す
+    private static (Mat Cropped, Rect Region) CropBoundingBox(
+        Mat sheet,
+        Candidate candidate,
+        double scaleX,
+        double scaleY,
+        int paddingPx)
     {
         int x0 = Math.Max(0, (int)(candidate.Left / scaleX) - paddingPx);
         int y0 = Math.Max(0, (int)(candidate.Top / scaleY) - paddingPx);
-        int x1 = Math.Min(sheetWidth, (int)((candidate.Left + candidate.Width) / scaleX) + paddingPx);
-        int y1 = Math.Min(sheetHeight, (int)((candidate.Top + candidate.Height) / scaleY) + paddingPx);
+        int x1 = Math.Min(sheet.Width, (int)((candidate.Left + candidate.Width) / scaleX) + paddingPx);
+        int y1 = Math.Min(sheet.Height, (int)((candidate.Top + candidate.Height) / scaleY) + paddingPx);
 
-        return new Rect(x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
+        Rect region = new(x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
+        using Mat regionView = new(sheet, region);
+        return (regionView.Clone(), region);
     }
 
-    private readonly record struct Candidate(int Left, int Top, int Width, int Height, int Area);
+    private readonly record struct Candidate(
+        int Left,
+        int Top,
+        int Width,
+        int Height,
+        int Area,
+        Point2f Center);
 
     // 採用する円盤サイズの範囲(フル解像度 px)。DPI 不明時は上限なし
     private readonly record struct SizeRange(int Min, int? Max)
