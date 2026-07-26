@@ -57,6 +57,49 @@ public sealed class StageViewModelTests : IDisposable
         Assert.False(viewModel.IsEmptyStateVisible);
     }
 
+    // 画像ファイルは解像度情報を持たず実寸法を推定できないため、規格径にもとづく
+    // 検出・切り出しが働かない。PDF で取り込み直せるよう警告する(#91)
+    [Theory]
+    [InlineData("sheet.jpg")]
+    [InlineData("sheet.jpeg")]
+    [InlineData("sheet.JPG")]
+    [InlineData("sheet.bmp")]
+    public async Task ImportAsync_WarnsWhenPathIsNotPdf(string path)
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline { Discs = [BuildDisc(0)] });
+
+        await viewModel.ImportAsync([path]);
+
+        Assert.True(viewModel.HasImportWarning);
+        Assert.Contains("PDF", viewModel.ImportWarning);
+    }
+
+    [Theory]
+    [InlineData("sheet.pdf")]
+    [InlineData("sheet.PDF")]
+    public async Task ImportAsync_DoesNotWarnForPdf(string path)
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline { Discs = [BuildDisc(0)] });
+
+        await viewModel.ImportAsync([path]);
+
+        Assert.False(viewModel.HasImportWarning);
+        Assert.Null(viewModel.ImportWarning);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WarningReportsImageCountAndClearsOnPdfOnlyImport()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline { Discs = [BuildDisc(0)] });
+
+        await viewModel.ImportAsync(["a.pdf", "b.jpg", "c.jpeg"]);
+        Assert.Contains("2 件", viewModel.ImportWarning);
+
+        // 取り込み直したら前回の警告は残らない
+        await viewModel.ImportAsync(["a.pdf"]);
+        Assert.False(viewModel.HasImportWarning);
+    }
+
     [Fact]
     public async Task ImportAsync_PipelineErrorKeepsPartialDiscsAndSetsError()
     {
