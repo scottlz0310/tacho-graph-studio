@@ -75,6 +75,46 @@ public sealed class SheetSplitterTests
         }
     }
 
+    // 印字が薄いと外周リングが分断され、断片が最小サイズに届かず連結成分では 1 件も
+    // 残らないことがある。Hough は勾配を見るため連結性を要求せず、この場合も検出できる(#91)
+    [Fact]
+    public void Split_FallsBackToHoughWhenContourIsBroken()
+    {
+        using Mat raw = new(600, 600, MatType.CV_8UC3, Scalar.All(255));
+        // 20 度の円弧を 30 度おきに描き、連結成分がどれも最小サイズに届かないようにする
+        for (int angle = 0; angle < 360; angle += 30)
+        {
+            Cv2.Ellipse(
+                raw,
+                new Point(300, 300),
+                new Size(StandardRadius, StandardRadius),
+                angle: 0,
+                startAngle: angle,
+                endAngle: angle + 20,
+                DiscGray,
+                thickness: 3);
+        }
+
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            Assert.Equal(FixedCropSize, disc.RegionInSheet.Width);
+
+            // 検出された中心が円弧の中心と一致する
+            int cropCenterX = disc.RegionInSheet.X + (disc.RegionInSheet.Width / 2);
+            int cropCenterY = disc.RegionInSheet.Y + (disc.RegionInSheet.Height / 2);
+            Assert.InRange(cropCenterX, 295, 305);
+            Assert.InRange(cropCenterY, 295, 305);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
     // 実運用では Task-Meter(125mm)と Yazaki(123mm)が混在する(#91)
     [Fact]
     public void Split_DetectsBothPaperStandards()

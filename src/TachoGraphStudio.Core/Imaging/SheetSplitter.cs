@@ -25,6 +25,13 @@ public sealed class SheetSplitter
     // 実測の中心ブレ(±0.2mm)と縦横比のずれ(0.6% ≒ 0.75mm)を吸収できる
     private const double CropDiameterMm = 127.0;
 
+    // Hough フォールバックのパラメータ。Canny の上側しきい値は、このフォールバックが
+    // 効くべき「薄い印字」を拾える値にする必要がある。実測では白地(255)との差が 15 の
+    // 描線は 50 では 1 件も検出できず、30 以下で検出できた。実データ 3 シートでは
+    // 50 と 30 のどちらでも誤検出は出ない
+    private const double HoughCannyThreshold = 30.0;
+    private const double HoughAccumulatorThreshold = 30.0;
+
     // Cv2.FitEllipse が要求する最小輪郭点数
     private const int MinContourPoints = 5;
 
@@ -49,7 +56,8 @@ public sealed class SheetSplitter
         double scaleX = (double)analysisWidth / pixels.Width;
         double scaleY = (double)analysisHeight / pixels.Height;
 
-        using Mat mask = BuildForegroundMask(pixels, analysisWidth, analysisHeight, options.Threshold);
+        using Mat analysis = BuildAnalysisImage(pixels, analysisWidth, analysisHeight);
+        using Mat mask = ForegroundMask.Build(analysis, options.Threshold);
         if (Cv2.CountNonZero(mask) == 0)
         {
             throw new DiscSplitException(
@@ -64,6 +72,15 @@ public sealed class SheetSplitter
             scaleY,
             sizeRange,
             cropSizePx is { } cropPx ? new Size2f((float)(cropPx * scaleX), (float)(cropPx * scaleY)) : null);
+
+        // 連結成分は円盤の輪郭が途切れず繋がっていることを前提にする。印字が薄いと
+        // 外周リングが分断され、断片が最小サイズに届かず 1 件も残らないことがある。
+        // Hough は勾配を見るため連結性を要求しないので代替経路として使う(#91)
+        if (candidates.Count == 0)
+        {
+            candidates = FindCandidatesByHough(analysis, scaleX, scaleY, options.Dpi);
+        }
+
         if (candidates.Count == 0)
         {
             throw new DiscSplitException(
@@ -143,13 +160,62 @@ public sealed class SheetSplitter
         return pixels;
     }
 
-    private static Mat BuildForegroundMask(Mat pixels, int analysisWidth, int analysisHeight, int threshold)
+    private static Mat BuildAnalysisImage(Mat pixels, int analysisWidth, int analysisHeight)
     {
         // GIMP 版と同じ最近傍サンプリングで縮小する
-        using Mat analysis = new();
+        Mat analysis = new();
         Cv2.Resize(pixels, analysis, new Size(analysisWidth, analysisHeight), 0, 0, InterpolationFlags.Nearest);
+        return analysis;
+    }
 
-        return ForegroundMask.Build(analysis, threshold);
+    // 連結成分で 1 件も取れなかったときの代替経路。円盤は直径が規格で固定されているため
+    // 半径の探索範囲を厳しく絞れる。範囲を緩めると誤検出が激増する(実測で 5 枚のシートに
+    // 対し 15 個検出)ので、DPI が既知で規格径を計算できる場合にのみ使う(#91)
+    private static List<Candidate> FindCandidatesByHough(Mat analysis, double scaleX, double scaleY, double? dpi)
+    {
+        if (dpi is not (>= MinValidDpi and <= MaxValidDpi))
+        {
+            return [];
+        }
+
+        double analysisScale = (scaleX + scaleY) / 2.0;
+        double pxPerMm = dpi.Value / 25.4 * analysisScale;
+        int minRadius = (int)(SmallDiscDiameterMm * (1.0 - DiameterTolerance) / 2 * pxPerMm);
+        int maxRadius = (int)(LargeDiscDiameterMm * (1.0 + DiameterTolerance) / 2 * pxPerMm);
+        if (minRadius < 1 || maxRadius <= minRadius)
+        {
+            return [];
+        }
+
+        using Mat gray = new();
+        Cv2.CvtColor(analysis, gray, ColorConversionCodes.BGR2GRAY);
+        using Mat blurred = new();
+        Cv2.GaussianBlur(gray, blurred, new Size(9, 9), 2);
+
+        CircleSegment[] circles = Cv2.HoughCircles(
+            blurred,
+            HoughModes.Gradient,
+            dp: 1,
+            // 円盤は重ならないので、中心間は小さい方の直径の 9 割以上離れている
+            minDist: SmallDiscDiameterMm * 0.9 * pxPerMm,
+            param1: HoughCannyThreshold,
+            param2: HoughAccumulatorThreshold,
+            minRadius: minRadius,
+            maxRadius: maxRadius);
+
+        List<Candidate> candidates = [];
+        foreach (CircleSegment circle in circles)
+        {
+            int diameter = (int)Math.Round(circle.Radius * 2);
+            int left = (int)Math.Round(circle.Center.X - circle.Radius);
+            int top = (int)Math.Round(circle.Center.Y - circle.Radius);
+
+            // 面積は MaxDiscs 超過時の並べ替えにしか使わないため円の面積で足りる
+            int area = (int)(Math.PI * circle.Radius * circle.Radius);
+            candidates.Add(new Candidate(left, top, diameter, diameter, area, circle.Center, circle.Radius * 2));
+        }
+
+        return candidates;
     }
 
     // DPI が既知なら規格径から採用範囲を確定する。旧実装は「直径の 2/3 以上」という
