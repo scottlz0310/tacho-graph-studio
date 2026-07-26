@@ -39,7 +39,7 @@ jobs:
         run: dotnet test tests/TachoGraphStudio.App.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           use_oidc: true
           directory: coverage
