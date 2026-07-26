@@ -15,7 +15,7 @@ public sealed class StagePipeline : IStagePipeline
 
     private readonly SheetLoader _sheetLoader;
     private readonly SheetSplitter _splitter = new();
-    private readonly BackgroundRemover _remover = new();
+    private readonly IBackgroundRemover _remover;
     private readonly DiscSplitOptions _pdfSplitOptions;
     private readonly DiscSplitOptions _imageSplitOptions;
     private readonly BackgroundRemovalOptions _removalOptions;
@@ -24,11 +24,13 @@ public sealed class StagePipeline : IStagePipeline
         SheetLoader sheetLoader,
         DiscSplitOptions? pdfSplitOptions = null,
         DiscSplitOptions? imageSplitOptions = null,
-        BackgroundRemovalOptions? removalOptions = null)
+        BackgroundRemovalOptions? removalOptions = null,
+        IBackgroundRemover? remover = null)
     {
         ArgumentNullException.ThrowIfNull(sheetLoader);
 
         _sheetLoader = sheetLoader;
+        _remover = remover ?? new BackgroundRemover();
         // PDF は WindowsPdfRasterizer のレンダリング DPI が既知。JPEG は DPI 不明のまま
         // SheetSplitter のフォールバック最小サイズに任せる
         _pdfSplitOptions = pdfSplitOptions ?? new DiscSplitOptions { Dpi = WindowsPdfRasterizer.DefaultDpi };

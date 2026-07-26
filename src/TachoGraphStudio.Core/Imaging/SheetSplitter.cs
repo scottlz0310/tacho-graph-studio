@@ -252,11 +252,16 @@ public sealed class SheetSplitter
         }
 
         RotatedRect fitted = Cv2.FitEllipse(outer);
+        float fittedDiameter = (fitted.Size.Width + fitted.Size.Height) / 2f;
+
+        // 中心と直径は必ず同じ出所の組で返す。bbox 中心にフィット直径を組み合わせると、
+        // 非対称な突起で bbox 中心がずれたときに真の円径のマスクごと移動し、
+        // 反対側の外周を切り落とす
         if (cropInAnalysis is not { } crop)
         {
-            // DPI 不明時は固定サイズ切り出しを行わないため収まり判定もできない。
-            // 中心はどのみち bbox 基準の切り出しに従う
-            return (boundingBoxCenter, (fitted.Size.Width + fitted.Size.Height) / 2f);
+            // DPI 不明時は固定サイズ切り出しを行わないため収まり判定の基準がない。
+            // 背景除去のマスクには中心精度が要るのでフィット結果をそのまま採る
+            return (fitted.Center, fittedDiameter);
         }
 
         float halfWidth = crop.Width / 2f;
@@ -267,10 +272,11 @@ public sealed class SheetSplitter
             && fitted.Center.Y - halfHeight <= top
             && top + height <= fitted.Center.Y + halfHeight;
 
-        // 収まらない場合は bbox 中心を採る。検出領域が切り出しより大きいときは
-        // どの中心でも収まらないが、bbox 中心なら欠損が四方へ均等に分かれる
+        // 収まらない場合は bbox 中心と bbox 直径の組を採る。検出領域が切り出しより
+        // 大きいときはどの中心でも収まらないが、bbox 中心なら欠損が四方へ均等に分かれ、
+        // マスクは検出領域全体を覆う
         return keepsDiscInside
-            ? (fitted.Center, (fitted.Size.Width + fitted.Size.Height) / 2f)
+            ? (fitted.Center, fittedDiameter)
             : (boundingBoxCenter, boundingBoxDiameter);
     }
 

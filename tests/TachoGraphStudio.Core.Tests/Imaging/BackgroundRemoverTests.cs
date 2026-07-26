@@ -46,6 +46,51 @@ public sealed class BackgroundRemoverTests
         Assert.Equal(255, center.Item3);
     }
 
+    // DPI 不明(JPEG 入力)経路の回帰。非対称な突起で bbox 中心は真の中心からずれるため、
+    // bbox 中心とフィット直径を組み合わせるとマスクごと移動して反対側の外周を切り落とす。
+    // 分割から背景除去まで通し、円盤の両端が不透明に残ることを固定する(#91)
+    [Fact]
+    public void Remove_KeepsBothEdgesOpaqueForAsymmetricContourWithoutDpi()
+    {
+        const int trueCenterX = 700;
+        const int trueCenterY = 700;
+        const int radius = 550;
+
+        using Mat sheet = new(1400, 1400, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(sheet, new Point(trueCenterX, trueCenterY), radius, DiscGray, thickness: -1);
+        // 細長い突起にすることで、bbox 中心を大きくずらしつつ楕円フィットへの影響は小さく保つ。
+        // 太い突起だとフィット直径も膨らみ、中心のずれを相殺してしまう
+        Cv2.Rectangle(sheet, new Rect(1250, 697, 105, 6), DiscGray, thickness: -1);
+        Cv2.ImEncode(".png", sheet, out byte[] encoded);
+        SheetImage sheetImage = new("synthetic.png", PageIndex: 0, encoded);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheetImage, new DiscSplitOptions { Dpi = null })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            using BackgroundRemovalResult result = new BackgroundRemover().Remove(disc);
+
+            // 円盤の左端・右端(輪郭のアンチエイリアスを避けて 15px 内側)が不透明であること。
+            // マスクがずれると該当点はクロップ範囲の外へ出るため、範囲判定も明示する
+            // (Mat.At は範囲外を検査せず読めてしまうため)
+            foreach (int sheetX in new[] { trueCenterX - radius + 15, trueCenterX + radius - 15 })
+            {
+                int x = sheetX - disc.RegionInSheet.X - result.RegionInDisc.X;
+                int y = trueCenterY - disc.RegionInSheet.Y - result.RegionInDisc.Y;
+                Assert.True(
+                    x >= 0 && x < result.Pixels.Width && y >= 0 && y < result.Pixels.Height,
+                    $"シート座標 X={sheetX} がクロップ範囲外です: ({x},{y}) / {result.Pixels.Width}x{result.Pixels.Height}");
+
+                Vec4b pixel = result.Pixels.At<Vec4b>(y, x);
+                Assert.True(pixel.Item3 > 0, $"シート座標 X={sheetX} が透明化されています");
+            }
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
     [Fact]
     public void Remove_OutputIsBgraCroppedToCircleBounds()
     {

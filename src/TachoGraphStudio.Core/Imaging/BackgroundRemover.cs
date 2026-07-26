@@ -7,7 +7,7 @@ namespace TachoGraphStudio.Core.Imaging;
 // (Cv2.FitEllipse)していたが、白地に線画で印字されたチャート紙では前景がリング状に
 // しか出ずフィットが不安定になる。円盤の形と位置は分割の時点で確定しているため
 // 再検出はせず、その結果をそのまま使う(#91)
-public sealed class BackgroundRemover
+public sealed class BackgroundRemover : IBackgroundRemover
 {
     public BackgroundRemovalResult Remove(DiscImage disc, BackgroundRemovalOptions? options = null)
     {

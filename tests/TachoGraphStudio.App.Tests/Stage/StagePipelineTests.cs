@@ -90,10 +90,45 @@ public sealed class StagePipelineTests : IDisposable
         Assert.Equal([0, 1, 0, 1], discs.Select(disc => disc.IndexInSheet));
     }
 
-    // ProcessAsync_YieldsEarlierDiscsBeforeLaterFailureInSameSheet は削除した。
-    // 背景除去が前景判定をやめ分割時の検出結果を使うようになったため(#91)、
-    // 分割に成功した円盤が背景除去で失敗する経路がなくなり、このテストが依存していた
-    // 「シート内の後続円盤だけが失敗する」状況を合成できなくなったため
+    // #29 で blocking になったストリーミング契約の回帰。同一シートの後続円盤の処理が
+    // 失敗しても、先行して変換できた円盤は呼び出し元へ届いていなければならない。
+    // 背景除去が前景判定をやめた(#91)ことで自然に失敗する入力を作れなくなったため、
+    // 2 件目だけ失敗する fake を注入して契約を固定する
+    [Fact]
+    public async Task ProcessAsync_YieldsEarlierDiscsBeforeLaterFailureInSameSheet()
+    {
+        using Mat sheet = BuildSheet(discCount: 2);
+        Cv2.ImEncode(".png", sheet, out byte[] pageBytes);
+        string path = Path.Combine(_temporaryDirectory, "partial.pdf");
+        File.WriteAllBytes(path, [0x25, 0x50, 0x44, 0x46]);
+        StagePipeline pipeline = new(
+            new SheetLoader(new FakePdfRasterizer(pageBytes, pageCount: 1)),
+            pdfSplitOptions: TestSplitOptions,
+            remover: new FailAfterFirstDiscRemover());
+
+        await using IAsyncEnumerator<ProcessedDisc> discs = pipeline.ProcessAsync([path]).GetAsyncEnumerator();
+
+        Assert.True(await discs.MoveNextAsync());
+        Assert.Equal(0, discs.Current.IndexInSheet);
+        await Assert.ThrowsAsync<BackgroundRemovalException>(async () => await discs.MoveNextAsync());
+    }
+
+    // 1 枚目だけ通し、2 枚目以降は失敗する
+    private sealed class FailAfterFirstDiscRemover : IBackgroundRemover
+    {
+        private readonly BackgroundRemover _inner = new();
+        private int _calls;
+
+        public BackgroundRemovalResult Remove(DiscImage disc, BackgroundRemovalOptions? options = null)
+        {
+            if (_calls++ > 0)
+            {
+                throw new BackgroundRemovalException("テスト用の失敗");
+            }
+
+            return _inner.Remove(disc, options);
+        }
+    }
 
     public void Dispose()
     {
