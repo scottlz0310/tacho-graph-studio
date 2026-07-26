@@ -18,6 +18,9 @@ public sealed class SheetSplitterTests
     // 125mm 相当。Dpi=50 では直径 247px
     private const int LargeStandardRadius = 123;
 
+    // 切り出しサイズ 127mm。Dpi=50 では 250px
+    private const int FixedCropSize = 250;
+
     private static readonly Scalar DiscGray = new(240, 240, 240);
 
     [Theory]
@@ -112,22 +115,24 @@ public sealed class SheetSplitterTests
         }
     }
 
+    // 検出サイズは前景判定のしきい値によるインクのにじみでぶれるが、規格径は固定なので
+    // 切り出しは常に同じ寸法になる(#91)
     [Fact]
-    public void Split_AppliesPaddingAroundDetectedRegion()
+    public void Split_CropsToStandardSizeRegardlessOfDetectedSize()
     {
-        SheetImage sheet = BuildSheet(600, 600, [(300, 300, StandardRadius)]);
+        SheetImage sheet = BuildSheet(1000, 600, [(250, 300, StandardRadius), (700, 300, LargeStandardRadius)]);
 
-        List<DiscImage> discs = [.. new SheetSplitter().Split(
-            sheet,
-            new DiscSplitOptions { Dpi = TestDpi, PaddingPx = 20 })];
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
         try
         {
-            DiscImage disc = Assert.Single(discs);
-            // 円盤の bbox は (179,179)-(421,421)。±2px はラスタライズ誤差
-            Assert.InRange(disc.RegionInSheet.Left, 157, 161);
-            Assert.InRange(disc.RegionInSheet.Top, 157, 161);
-            Assert.InRange(disc.RegionInSheet.Right, 439, 443);
-            Assert.InRange(disc.RegionInSheet.Bottom, 439, 443);
+            Assert.Equal(2, discs.Count);
+            foreach (DiscImage disc in discs)
+            {
+                Assert.Equal(FixedCropSize, disc.RegionInSheet.Width);
+                Assert.Equal(FixedCropSize, disc.RegionInSheet.Height);
+                Assert.Equal(FixedCropSize, disc.Pixels.Width);
+                Assert.Equal(FixedCropSize, disc.Pixels.Height);
+            }
         }
         finally
         {
@@ -135,20 +140,134 @@ public sealed class SheetSplitterTests
         }
     }
 
-    [Fact]
-    public void Split_ClampsRegionToSheetBounds()
+    // 固定サイズ切り出しでは円盤が常に画像中心に来る。後段の背景除去はこれを前提にできる
+    [Theory]
+    [InlineData(300, 300)]
+    [InlineData(220, 380)]
+    public void Split_CentersDiscInFixedCrop(int centerX, int centerY)
     {
-        // 円盤がシート左上隅にはみ出しており、パディングは画像外へ伸ばせない
-        SheetImage sheet = BuildSheet(600, 600, [(126, 126, StandardRadius)]);
+        SheetImage sheet = BuildSheet(700, 700, [(centerX, centerY, StandardRadius)]);
 
-        List<DiscImage> discs = [.. new SheetSplitter().Split(
-            sheet,
-            new DiscSplitOptions { Dpi = TestDpi, PaddingPx = 30 })];
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
         try
         {
             DiscImage disc = Assert.Single(discs);
-            Assert.Equal(0, disc.RegionInSheet.Left);
-            Assert.Equal(0, disc.RegionInSheet.Top);
+            int cropCenterX = disc.RegionInSheet.X + (disc.RegionInSheet.Width / 2);
+            int cropCenterY = disc.RegionInSheet.Y + (disc.RegionInSheet.Height / 2);
+
+            // ±2px はラスタライズと解析スケール往復の誤差
+            Assert.InRange(cropCenterX, centerX - 2, centerX + 2);
+            Assert.InRange(cropCenterY, centerY - 2, centerY + 2);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    // bbox 中心と楕円フィット中心がずれる非対称輪郭。楕円フィットは突起に引きずられにくいため、
+    // bbox 中心より真の円中心に近い位置で切り出される
+    [Fact]
+    public void Split_PrefersEllipseCenterOverBoundingBoxCenterForAsymmetricContour()
+    {
+        const int trueCenter = 350;
+        using Mat raw = new(700, 700, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(raw, new Point(trueCenter, trueCenter), 110, DiscGray, thickness: -1);
+        // 右側の突起で bbox だけを広げる
+        Cv2.Rectangle(raw, new Rect(460, 340, 12, 20), DiscGray, thickness: -1);
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            int cropCenterX = disc.RegionInSheet.X + (disc.RegionInSheet.Width / 2);
+
+            // bbox は 240..472 なのでその中心は 356。楕円フィットが採用されていれば
+            // 真の中心 350 により近くなる
+            int boundingBoxCenterX = 356;
+            Assert.True(
+                Math.Abs(cropCenterX - trueCenter) < Math.Abs(boundingBoxCenterX - trueCenter),
+                $"楕円フィット中心が採用されていません: 切り出し中心={cropCenterX}");
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    // 検出領域が切り出しより大きい場合、楕円フィット中心を採ると円盤の外周を切り落とす。
+    // このときは bbox 中心へフォールバックし、欠損を四方へ均等に分ける
+    [Fact]
+    public void Split_FallsBackToBoundingBoxCenterWhenRegionExceedsCrop()
+    {
+        using Mat raw = new(700, 700, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(raw, new Point(350, 350), StandardRadius, DiscGray, thickness: -1);
+        // bbox 幅を切り出しサイズ(250px)より大きくする
+        Cv2.Rectangle(raw, new Rect(471, 340, 18, 20), DiscGray, thickness: -1);
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            int cropCenterX = disc.RegionInSheet.X + (disc.RegionInSheet.Width / 2);
+
+            // bbox は 229..489 なのでその中心は 359
+            Assert.InRange(cropCenterX, 357, 361);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    // シート外へはみ出す場合も切り縮めず白で埋める。切り縮めると円盤が中心からずれてしまう
+    [Fact]
+    public void Split_PadsWithWhiteWhenCropExceedsSheet()
+    {
+        // 円盤がシート左上隅からはみ出しており、切り出しの起点が負になる
+        SheetImage sheet = BuildSheet(600, 600, [(110, 110, StandardRadius)]);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            Assert.Equal(FixedCropSize, disc.Pixels.Width);
+            Assert.Equal(FixedCropSize, disc.Pixels.Height);
+            Assert.True(disc.RegionInSheet.X < 0, $"シート外へ伸びていません: {disc.RegionInSheet}");
+            Assert.True(disc.RegionInSheet.Y < 0, $"シート外へ伸びていません: {disc.RegionInSheet}");
+
+            // 左上隅はシート外なので白で埋まっている
+            Vec3b corner = disc.Pixels.At<Vec3b>(0, 0);
+            Assert.Equal(255, corner.Item0);
+            Assert.Equal(255, corner.Item1);
+            Assert.Equal(255, corner.Item2);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    // DPI 不明時は規格サイズを算出できないため、従来どおり bbox + パディングで切り出す
+    [Fact]
+    public void Split_AppliesPaddingAroundDetectedRegionWithoutDpi()
+    {
+        // フォールバックの最小サイズ 1000px を満たす円盤が要る
+        SheetImage sheet = BuildSheet(1400, 1400, [(700, 700, 550)]);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(
+            sheet,
+            new DiscSplitOptions { Dpi = null, PaddingPx = 20 })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            // 円盤の bbox は (150,150)-(1250,1250)。解析スケール往復で ±4px の誤差が出る
+            Assert.InRange(disc.RegionInSheet.Left, 126, 134);
+            Assert.InRange(disc.RegionInSheet.Top, 126, 134);
+            Assert.InRange(disc.RegionInSheet.Right, 1266, 1274);
+            Assert.InRange(disc.RegionInSheet.Bottom, 1266, 1274);
         }
         finally
         {

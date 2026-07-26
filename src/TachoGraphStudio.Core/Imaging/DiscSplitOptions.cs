@@ -10,7 +10,8 @@ public sealed record DiscSplitOptions
     // 実測では 8 以下で 3 種のシートすべてを正しく検出できる(#91)
     public int Threshold { get; init; } = 7;
 
-    // 検出領域の周囲に付加する余白(フル解像度 px)。後段の背景除去(issue #9)の作業領域を確保する
+    // 検出領域の周囲に付加する余白(フル解像度 px)。後段の背景除去(issue #9)の作業領域を確保する。
+    // Dpi が既知の場合は規格サイズ(直径 125mm + 片側 1mm)で切り出すため参照されない(#91)
     public int PaddingPx { get; init; } = 20;
 
     // FR-01: 1 シートに最大 6 枚。超過分はノイズとみなし面積の大きい順に採用する
