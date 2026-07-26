@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.Win32;
 
 using WinUIEx;
 
@@ -40,7 +42,12 @@ public static class Program
         // 呼び出しごと消える。Trace は Release でも TRACE が定義されるため残る
         try
         {
-            return SimpleSplashScreen.ShowDefaultSplashScreen();
+            string? imagePath = ResolveSplashImagePath();
+
+            // 解決できなければマニフェスト定義（ダーク）を MRT 経由で表示する既定動作に戻す
+            return imagePath is null
+                ? SimpleSplashScreen.ShowDefaultSplashScreen()
+                : SimpleSplashScreen.ShowSplashScreenImage(imagePath);
         }
         catch (InvalidOperationException ex)
         {
@@ -48,4 +55,37 @@ public static class Program
             return null;
         }
     }
+
+    /// <summary>
+    /// システムテーマと DPI に対応する splash 画像のパスを返す。見つからなければ null。
+    /// </summary>
+    private static string? ResolveSplashImagePath()
+    {
+        string fileName = SplashAssetResolver.GetFileName(IsLightTheme(), GetSystemScale());
+        string path = Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
+
+        return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// アプリのテーマがライトかどうか。取得できない場合は、これまで唯一の splash であった
+    /// ダークを既定とする。
+    /// </summary>
+    private static bool IsLightTheme()
+    {
+        object? value = Registry.GetValue(
+            @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "AppsUseLightTheme",
+            defaultValue: null);
+
+        return value is int useLightTheme && useLightTheme != 0;
+    }
+
+    /// <summary>システム DPI を Windows の表示倍率（100 / 125 / 150 …）に換算する。</summary>
+    private static int GetSystemScale() => (int)Math.Round(GetDpiForSystem() * 100.0 / 96.0);
+
+    // LibraryImport は AllowUnsafeBlocks をプロジェクト全体で要求する（SYSLIB1062）。
+    // 引数なし・戻り値 blittable のこの 1 箇所のために unsafe を解禁はしない
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
 }

@@ -44,7 +44,8 @@
           </uap:ShowNameOnTiles>
         </uap:DefaultTile>
         <!-- OS はこの splash を描画しない（WinUI 3 デスクトップアプリのため / #81）。
-             WinUIEx の SimpleSplashScreen がこの定義を読んで自前で表示する -->
+             通常は Program.cs がテーマに応じた画像を選んで表示するため、この定義は
+             選択に失敗した場合のフォールバック（ShowDefaultSplashScreen）で使われる（#88） -->
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
     </Application>
