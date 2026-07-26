@@ -25,10 +25,6 @@ public sealed class SheetSplitter
     // 実測の中心ブレ(±0.2mm)と縦横比のずれ(0.6% ≒ 0.75mm)を吸収できる
     private const double CropDiameterMm = 127.0;
 
-    // 楕円フィットによる中心が bbox 中心から直径のこの割合を超えて離れたら、
-    // フィットが破綻したとみなして bbox 中心を採る
-    private const double CenterAgreementRatio = 0.05;
-
     // Cv2.FitEllipse が要求する最小輪郭点数
     private const int MinContourPoints = 5;
 
@@ -60,8 +56,14 @@ public sealed class SheetSplitter
                 $"円盤を検出できません（threshold={options.Threshold}）: {sheet.SourcePath}（{sheet.PageIndex + 1} ページ目）");
         }
 
+        int? cropSizePx = FixedCropSizePx(options.Dpi);
         SizeRange sizeRange = AcceptableDiscSizePx(options.Dpi);
-        List<Candidate> candidates = FindCandidates(mask, scaleX, scaleY, sizeRange);
+        List<Candidate> candidates = FindCandidates(
+            mask,
+            scaleX,
+            scaleY,
+            sizeRange,
+            cropSizePx is { } cropPx ? new Size2f((float)(cropPx * scaleX), (float)(cropPx * scaleY)) : null);
         if (candidates.Count == 0)
         {
             throw new DiscSplitException(
@@ -76,8 +78,6 @@ public sealed class SheetSplitter
         candidates.Sort((left, right) => left.Top != right.Top
             ? left.Top.CompareTo(right.Top)
             : left.Left.CompareTo(right.Left));
-
-        int? cropSizePx = FixedCropSizePx(options.Dpi);
 
         List<DiscImage> discs = [];
         try
@@ -173,7 +173,8 @@ public sealed class SheetSplitter
         Mat mask,
         double scaleX,
         double scaleY,
-        SizeRange sizeRange)
+        SizeRange sizeRange,
+        Size2f? cropInAnalysis)
     {
         using Mat labels = new();
         using Mat stats = new();
@@ -198,7 +199,10 @@ public sealed class SheetSplitter
             int fullHeight = (int)(height / scaleY);
             if (sizeRange.Contains(fullWidth) && sizeRange.Contains(fullHeight) && IsCircular(width, height))
             {
-                Point2f center = DetectCenter(labels, label, left, top, width, height);
+                // 中心は固定サイズ切り出しでしか使わない。DPI 不明時は算出を省く
+                Point2f center = cropInAnalysis is { } crop
+                    ? DetectCenter(labels, label, left, top, width, height, crop)
+                    : new Point2f(left + (width / 2f), top + (height / 2f));
                 candidates.Add(new Candidate(left, top, width, height, area, center));
             }
         }
@@ -208,8 +212,17 @@ public sealed class SheetSplitter
 
     // 外周輪郭への楕円フィットで中心を求める。しきい値を振ったときのブレは実測で
     // bbox 中心の 1/10 以下だった。ただし線画の円盤では稀にフィットが外れるため、
-    // bbox 中心から大きく離れた結果は採用しない(#91)
-    private static Point2f DetectCenter(Mat labels, int label, int left, int top, int width, int height)
+    // 採用可否は「その中心で検出領域が切り出しに収まるか」で判定する(#91)。
+    // 切り出しの余白は片側 1mm しかなく、経験的な許容割合では円盤の外周を
+    // 切り落とす中心を通してしまうため、余白そのものを基準にする
+    private static Point2f DetectCenter(
+        Mat labels,
+        int label,
+        int left,
+        int top,
+        int width,
+        int height,
+        Size2f cropInAnalysis)
     {
         Point2f boundingBoxCenter = new(left + (width / 2f), top + (height / 2f));
 
@@ -229,11 +242,17 @@ public sealed class SheetSplitter
         }
 
         Point2f fitted = Cv2.FitEllipse(outer).Center;
-        double limit = Math.Max(width, height) * CenterAgreementRatio;
-        double deviation = Math.Sqrt(
-            Math.Pow(fitted.X - boundingBoxCenter.X, 2) + Math.Pow(fitted.Y - boundingBoxCenter.Y, 2));
+        float halfWidth = cropInAnalysis.Width / 2f;
+        float halfHeight = cropInAnalysis.Height / 2f;
+        bool keepsDiscInside =
+            fitted.X - halfWidth <= left
+            && left + width <= fitted.X + halfWidth
+            && fitted.Y - halfHeight <= top
+            && top + height <= fitted.Y + halfHeight;
 
-        return deviation <= limit ? fitted : boundingBoxCenter;
+        // 収まらない場合は bbox 中心を採る。検出領域が切り出しより大きいときは
+        // どの中心でも収まらないが、bbox 中心なら欠損が四方へ均等に分かれる
+        return keepsDiscInside ? fitted : boundingBoxCenter;
     }
 
     // 円盤は正円なので bbox はほぼ正方形になる。細長い異物を落とすための保険

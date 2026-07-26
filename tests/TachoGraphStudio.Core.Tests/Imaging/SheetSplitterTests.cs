@@ -165,6 +165,63 @@ public sealed class SheetSplitterTests
         }
     }
 
+    // bbox 中心と楕円フィット中心がずれる非対称輪郭。楕円フィットは突起に引きずられにくいため、
+    // bbox 中心より真の円中心に近い位置で切り出される
+    [Fact]
+    public void Split_PrefersEllipseCenterOverBoundingBoxCenterForAsymmetricContour()
+    {
+        const int trueCenter = 350;
+        using Mat raw = new(700, 700, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(raw, new Point(trueCenter, trueCenter), 110, DiscGray, thickness: -1);
+        // 右側の突起で bbox だけを広げる
+        Cv2.Rectangle(raw, new Rect(460, 340, 12, 20), DiscGray, thickness: -1);
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            int cropCenterX = disc.RegionInSheet.X + (disc.RegionInSheet.Width / 2);
+
+            // bbox は 240..472 なのでその中心は 356。楕円フィットが採用されていれば
+            // 真の中心 350 により近くなる
+            int boundingBoxCenterX = 356;
+            Assert.True(
+                Math.Abs(cropCenterX - trueCenter) < Math.Abs(boundingBoxCenterX - trueCenter),
+                $"楕円フィット中心が採用されていません: 切り出し中心={cropCenterX}");
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    // 検出領域が切り出しより大きい場合、楕円フィット中心を採ると円盤の外周を切り落とす。
+    // このときは bbox 中心へフォールバックし、欠損を四方へ均等に分ける
+    [Fact]
+    public void Split_FallsBackToBoundingBoxCenterWhenRegionExceedsCrop()
+    {
+        using Mat raw = new(700, 700, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(raw, new Point(350, 350), StandardRadius, DiscGray, thickness: -1);
+        // bbox 幅を切り出しサイズ(250px)より大きくする
+        Cv2.Rectangle(raw, new Rect(471, 340, 18, 20), DiscGray, thickness: -1);
+        SheetImage sheet = Encode(raw);
+
+        List<DiscImage> discs = [.. new SheetSplitter().Split(sheet, new DiscSplitOptions { Dpi = TestDpi })];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            int cropCenterX = disc.RegionInSheet.X + (disc.RegionInSheet.Width / 2);
+
+            // bbox は 229..489 なのでその中心は 359
+            Assert.InRange(cropCenterX, 357, 361);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
     // シート外へはみ出す場合も切り縮めず白で埋める。切り縮めると円盤が中心からずれてしまう
     [Fact]
     public void Split_PadsWithWhiteWhenCropExceedsSheet()
