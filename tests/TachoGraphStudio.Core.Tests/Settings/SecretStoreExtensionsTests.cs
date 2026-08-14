@@ -8,7 +8,9 @@ public sealed class SecretStoreExtensionsTests
 {
     private static readonly SupabaseCredentials Credentials = SupabaseCredentials.Create(
         new Uri("https://example.supabase.co"),
-        "test-anon-key");
+        "test-anon-key",
+        "shared@example.com",
+        "test-password");
 
     [Fact]
     public async Task TryWriteAsync_StoreSucceedsReturnsTrue()

@@ -51,6 +51,7 @@ tacho-graph-studio/
 | 名前空間 | 責務 | 対応要件 |
 |---|---|---|
 | `Core.Imaging` | シート読込・円盤分割・背景除去・回転・文字入れ合成・PNG 出力 | FR-01〜08, FR-18〜19 |
+| `Core.Auth` | Supabase Auth の access token 取得・更新（`ISupabaseSession`） | FR-09, FR-23 |
 | `Core.Roster` | Supabase（PostgREST）読み取りクライアント・オフラインキャッシュ・フィルタ | FR-09〜12 |
 | `Core.Templates` | チャート紙様式テンプレートの定義・シリアライズ・旧 GIMP 版 JSON インポート | FR-16, FR-24〜26 |
 | `Core.Naming` | 出力ファイル命名（通常 `YYYYMMDD_登録番号_運転者.png`、手書き時は末尾に `_手書き`） | FR-17, FR-20 |
@@ -76,6 +77,8 @@ Load(PDF/JPEG) → Split(円盤検出・分割) → RemoveBackground(楕円フ�
 ### 3.2 名簿連携（Core.Roster）
 
 - `IRosterClient`: `machine_picklist` ビューへの PostgREST GET のみ（読み取り専用、書き込み API は持たない）。`HttpClient` を注入しテストでモック可能にする
+- 認証は `ISupabaseSession`（`Core.Auth`）を注入して行う。`Authorization` は Supabase Auth の access token、`apikey` は anon キー。名簿・業者マスタは同一セッションを共有し、token 取得を 1 回で済ませる（#107）
+- 401/403 は token 失効の可能性があるため一度だけ token を取り直して再送し、それでも拒否された場合は `SupabaseAuthenticationException` として利用者へ理由を表示する。ネットワーク不通（`HttpRequestException`）はキャッシュフォールバックの対象のままとし、認証失敗と区別する
 - `RosterCache`: 最終取得分をローカル JSON にキャッシュし、オフライン時はキャッシュで動作（FR-10 / NFR-04）。App は current user 単位かつバックアップ対象外の `ApplicationData.LocalCacheFolder` 配下のパスを Core に渡し、共有フォルダや任意のユーザー指定パスには保存しない
 - フィルタ（シーズン・キーワード・管理番号ジャンプ・`is_tacho_target` デフォルト絞り込み）は machinery-report-system の `MachineSelectDialog` のロジックを Core 側に移植する（FR-11〜12）
 - 永続化するフィルタ設定はシーズンと `is_tacho_target` 限定フラグとする。検索ごとに変化するキーワードと管理番号ジャンプ入力は永続化せず、画面を開くたびに空で開始する
@@ -83,7 +86,8 @@ Load(PDF/JPEG) → Split(円盤検出・分割) → RemoveBackground(楕円フ�
 ### 3.3 設定・秘匿情報（Core.Settings + App）
 
 - 一般設定（出力先・前回日付・テンプレート選択・フィルタ状態・ウィンドウ状態）: `ApplicationData` 配下の JSON
-- Supabase URL・anon キー: Core は `ISecretStore` 抽象のみを持ち、実装は App 側で **DPAPI**（`ProtectedData`, `DataProtectionScope.CurrentUser`）により暗号化保存（FR-23、2026-07-18 決定）。`PasswordVault` はパッケージ ID 必須で unpackaged 実行・xUnit ホストからテストできないため不採用。平文の設定ファイル・リポジトリ・MSIX には含めない
+- Supabase URL・anon キー・読み取り用アカウント（メールアドレス・パスワード）: Core は `ISecretStore` 抽象のみを持ち、実装は App 側で **DPAPI**（`ProtectedData`, `DataProtectionScope.CurrentUser`）により暗号化保存（FR-23、2026-07-18 決定）。`PasswordVault` はパッケージ ID 必須で unpackaged 実行・xUnit ホストからテストできないため不採用。平文の設定ファイル・リポジトリ・MSIX には含めない
+- 秘匿ストアのフォーマットは version 2（アカウント追加、#107）。version 1 は読み込まず「接続設定が無効」として再入力を促す。どのみちアカウントの入力が必須なため、移行専用の分岐は設けない
 - 設定 UI は `ContentDialog`。未設定時は起動時に自動表示し、以降は「設定」ボタンから再入力・変更できる
 - キー未設定・無効時は（名簿パネル実装前の現時点では）`InfoBar` で設定導線を出し、名簿以外の機能は動作継続する（FR-23）。名簿パネル実装後は同パネル内の導線に置き換える
 

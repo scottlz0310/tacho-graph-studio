@@ -9,7 +9,7 @@
     PrimaryButtonText="保存">
     <StackPanel MinWidth="360" Spacing="12">
         <TextBlock
-            Text="名簿データを取得する Supabase プロジェクトの URL と anon キーを入力してください。"
+            Text="名簿データを取得する Supabase プロジェクトの URL・anon キーと、読み取りに使用するアカウントを入力してください。"
             TextWrapping="Wrap" />
         <TextBox
             x:Name="ProjectUrlTextBox"
@@ -18,6 +18,13 @@
         <PasswordBox
             x:Name="AnonKeyPasswordBox"
             Header="anon キー" />
+        <TextBox
+            x:Name="EmailTextBox"
+            Header="メールアドレス"
+            PlaceholderText="shared@example.com" />
+        <PasswordBox
+            x:Name="PasswordBox"
+            Header="パスワード" />
         <TextBlock
             x:Name="ErrorTextBlock"
             Foreground="{ThemeResource SystemFillColorCriticalBrush}"

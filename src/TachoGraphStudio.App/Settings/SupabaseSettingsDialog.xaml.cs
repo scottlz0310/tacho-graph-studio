@@ -20,6 +20,8 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
         {
             ProjectUrlTextBox.Text = existingCredentials.ProjectUrl.AbsoluteUri;
             AnonKeyPasswordBox.Password = existingCredentials.AnonKey;
+            EmailTextBox.Text = existingCredentials.Email;
+            PasswordBox.Password = existingCredentials.Password;
         }
     }
 
@@ -40,7 +42,11 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
             SupabaseCredentials candidate;
             try
             {
-                candidate = SupabaseCredentials.Create(projectUrl, AnonKeyPasswordBox.Password);
+                candidate = SupabaseCredentials.Create(
+                    projectUrl,
+                    AnonKeyPasswordBox.Password,
+                    EmailTextBox.Text.Trim(),
+                    PasswordBox.Password);
             }
             catch (ArgumentException exception)
             {
@@ -49,10 +55,10 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
                 return;
             }
 
-            bool isValid = await VerifyConnectivityAsync(candidate);
-            if (!isValid)
+            SupabaseConnectionResult connectionResult = await VerifyConnectivityAsync(candidate);
+            if (!connectionResult.IsValid)
             {
-                ShowError("Supabase に接続できませんでした。プロジェクト URL と anon キーを確認してください。");
+                ShowError(connectionResult.ErrorMessage ?? "Supabase に接続できませんでした。");
                 args.Cancel = true;
                 return;
             }
@@ -65,14 +71,14 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
         }
     }
 
-    private async Task<bool> VerifyConnectivityAsync(SupabaseCredentials candidate)
+    private async Task<SupabaseConnectionResult> VerifyConnectivityAsync(SupabaseCredentials candidate)
     {
         string originalPrimaryButtonText = PrimaryButtonText;
         IsPrimaryButtonEnabled = false;
         PrimaryButtonText = "接続を確認しています...";
         try
         {
-            return await _credentialsValidator.IsValidAsync(candidate);
+            return await _credentialsValidator.ValidateAsync(candidate);
         }
         finally
         {

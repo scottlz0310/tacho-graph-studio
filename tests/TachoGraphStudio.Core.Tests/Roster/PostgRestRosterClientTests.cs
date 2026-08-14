@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text;
 
+using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Roster;
+using TachoGraphStudio.Core.Tests.Auth;
 
 namespace TachoGraphStudio.Core.Tests.Roster;
 
@@ -12,7 +14,7 @@ public sealed class PostgRestRosterClientTests
     [Theory]
     [InlineData("https://example.supabase.co")]
     [InlineData("https://example.supabase.co/")]
-    public async Task GetRosterAsync_SendsReadOnlyRequestAndMapsResponse(string projectUrl)
+    public async Task GetRosterAsync_SendsAuthenticatedReadOnlyRequestAndMapsResponse(string projectUrl)
     {
         const string responseJson = """
             [
@@ -34,7 +36,7 @@ public sealed class PostgRestRosterClientTests
         PostgRestRosterClient client = new(
             httpClient,
             new Uri(projectUrl),
-            "test-anon-key",
+            new FakeSupabaseSession(),
             new FixedTimeProvider(RetrievedAt));
 
         RosterResult result = await client.GetRosterAsync(CancellationToken.None);
@@ -44,8 +46,9 @@ public sealed class PostgRestRosterClientTests
         Assert.Equal(
             "/rest/v1/machine_picklist?select=ctrl_num,detail,spec,vehicle_num,vehicle_type,driver,work_period,updated_at,is_tacho_target&order=ctrl_num.asc",
             request.RequestUri?.PathAndQuery);
+        // anon キーではなく Supabase Auth の access token で読む(#107)
         Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
-        Assert.Equal("test-anon-key", request.Headers.Authorization?.Parameter);
+        Assert.Equal("access-token-1", request.Headers.Authorization?.Parameter);
         Assert.Equal("test-anon-key", Assert.Single(request.Headers.GetValues("apikey")));
         Assert.Null(request.Content);
 
@@ -66,7 +69,52 @@ public sealed class PostgRestRosterClientTests
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden)]
+    public async Task GetRosterAsync_TokenRejectionRetriesOnceWithFreshToken(HttpStatusCode statusCode)
+    {
+        const string responseJson = """[{ "ctrl_num": 1, "is_tacho_target": true }]""";
+        int callCount = 0;
+        RecordingHandler handler = new(_ => ++callCount == 1
+            ? JsonResponse(statusCode, "unauthorized")
+            : JsonResponse(HttpStatusCode.OK, responseJson));
+        using HttpClient httpClient = new(handler);
+        FakeSupabaseSession session = new();
+        PostgRestRosterClient client = new(httpClient, new Uri("https://example.supabase.co"), session);
+
+        RosterResult result = await client.GetRosterAsync(CancellationToken.None);
+
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("access-token-1", handler.Requests[0].Headers.Authorization?.Parameter);
+        Assert.Equal("access-token-2", handler.Requests[1].Headers.Authorization?.Parameter);
+        Assert.Equal("access-token-1", Assert.Single(session.InvalidatedTokens));
+        Assert.Single(result.Entries);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task GetRosterAsync_PersistentAuthorizationFailureThrowsAuthenticationException(
+        HttpStatusCode statusCode)
+    {
+        const string responseBody = "個人名を含む可能性があるレスポンス";
+        RecordingHandler handler = new(_ => JsonResponse(statusCode, responseBody));
+        using HttpClient httpClient = new(handler);
+        PostgRestRosterClient client = new(
+            httpClient,
+            new Uri("https://example.supabase.co"),
+            new FakeSupabaseSession());
+
+        SupabaseAuthenticationException exception =
+            await Assert.ThrowsAsync<SupabaseAuthenticationException>(
+                () => client.GetRosterAsync(CancellationToken.None));
+
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Contains("名簿", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(responseBody, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadRequest)]
     public async Task GetRosterAsync_NonSuccessStatusThrowsWithoutReadingRosterBody(HttpStatusCode statusCode)
     {
         const string responseBody = "個人名を含む可能性があるレスポンス";
@@ -75,7 +123,7 @@ public sealed class PostgRestRosterClientTests
         PostgRestRosterClient client = new(
             httpClient,
             new Uri("https://example.supabase.co"),
-            "test-anon-key");
+            new FakeSupabaseSession());
 
         HttpRequestException exception = await Assert.ThrowsAsync<HttpRequestException>(
             () => client.GetRosterAsync(CancellationToken.None));
@@ -105,7 +153,7 @@ public sealed class PostgRestRosterClientTests
         PostgRestRosterClient client = new(
             httpClient,
             new Uri("https://example.supabase.co"),
-            "test-anon-key");
+            new FakeSupabaseSession());
 
         RosterResult result = await client.GetRosterAsync(CancellationToken.None);
 
@@ -120,17 +168,15 @@ public sealed class PostgRestRosterClientTests
         Assert.False(entry.IsTachoTarget);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_BlankAnonKeyThrows(string anonKey)
+    [Fact]
+    public void Constructor_NullSessionThrows()
     {
         using HttpClient httpClient = new();
 
-        Assert.Throws<ArgumentException>(() => new PostgRestRosterClient(
+        Assert.Throws<ArgumentNullException>(() => new PostgRestRosterClient(
             httpClient,
             new Uri("https://example.supabase.co"),
-            anonKey));
+            null!));
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json)
