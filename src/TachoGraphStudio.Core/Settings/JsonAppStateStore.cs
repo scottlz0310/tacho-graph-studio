@@ -51,6 +51,7 @@ public sealed class JsonAppStateStore : IAppStateStore, IDisposable
             LastTargetDate = document.LastTargetDate,
             SelectedTemplateId = document.SelectedTemplateId,
             ExportDpi = document.ExportDpi,
+            LastShownVersion = document.LastShownVersion,
             SidebarWidth = document.SidebarWidth,
             Window = document.Window,
         };
@@ -67,6 +68,7 @@ public sealed class JsonAppStateStore : IAppStateStore, IDisposable
             LastTargetDate = state.LastTargetDate,
             SelectedTemplateId = state.SelectedTemplateId,
             ExportDpi = state.ExportDpi,
+            LastShownVersion = state.LastShownVersion,
             SidebarWidth = state.SidebarWidth,
             Window = state.Window,
         };
@@ -90,6 +92,8 @@ public sealed class JsonAppStateStore : IAppStateStore, IDisposable
         public string? SelectedTemplateId { get; init; }
 
         public int? ExportDpi { get; init; }
+
+        public string? LastShownVersion { get; init; }
 
         public double? SidebarWidth { get; init; }
 

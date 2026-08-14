@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 using TachoGraphStudio.App.Imaging;
@@ -6,6 +7,9 @@ namespace TachoGraphStudio.App.Tests.Imaging;
 
 public sealed class WindowsPdfRasterizerTests : IDisposable
 {
+    private const int CleanupAttempts = 5;
+    private static readonly TimeSpan CleanupRetryDelay = TimeSpan.FromMilliseconds(50);
+
     private readonly string _temporaryDirectory = Path.Combine(
         Path.GetTempPath(),
         $"TachoGraphStudio.Tests-{Guid.NewGuid():N}");
@@ -69,9 +73,31 @@ public sealed class WindowsPdfRasterizerTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_temporaryDirectory))
+        for (int attempt = 0; attempt < CleanupAttempts; attempt++)
         {
-            Directory.Delete(_temporaryDirectory, recursive: true);
+            if (!Directory.Exists(_temporaryDirectory))
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(_temporaryDirectory, recursive: true);
+                return;
+            }
+            catch (Exception exception) when (
+                exception is IOException or UnauthorizedAccessException)
+            {
+                if (attempt + 1 < CleanupAttempts)
+                {
+                    // Windows.Data.Pdf の RCW 解放と競合した場合だけ短く待って再試行する。
+                    Thread.Sleep(CleanupRetryDelay);
+                    continue;
+                }
+
+                Trace.WriteLine($"テスト用一時ディレクトリの削除を諦めました: {exception.Message}");
+                return;
+            }
         }
     }
 

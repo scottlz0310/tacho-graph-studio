@@ -46,6 +46,11 @@
     <!-- MSIX には appxrecipe 経由でプロジェクト配下から直接取り込まれるが、
          AppWindow.SetIcon は実行ディレクトリを基準に解決するため出力にも配置する（#79） -->
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 更新後の変更点ダイアログが読むリリースノート（#100） -->
+    <Content
+      Include="..\..\CHANGELOG.md"
+      Link="CHANGELOG.md"
+      CopyToOutputDirectory="PreserveNewest" />
     <!-- App Installer のカスタム UX（#92）。パッケージルート直下の
          MSIX.AppInstaller.Data フォルダに置く必要がある -->
     <Content Include="MSIX.AppInstaller.Data\MSIXAppInstallerData.xml" />
