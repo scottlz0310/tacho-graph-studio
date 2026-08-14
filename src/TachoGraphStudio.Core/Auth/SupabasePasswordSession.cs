@@ -8,8 +8,13 @@ using System.Text.Json.Serialization;
 namespace TachoGraphStudio.Core.Auth;
 
 // Supabase Auth のパスワードグラントで access token を取得・更新するセッション(#107)。
-// 名簿・業者マスタの読み取りは authenticated ロールを要求するため anon キー単独では通らない
-public sealed class SupabasePasswordSession : ISupabaseSession, IDisposable
+// 名簿・業者マスタの読み取りは authenticated ロールを要求するため anon キー単独では通らない。
+//
+// 破棄を必要としない設計にしている。token 取得中(gate 保持中)にウィンドウ終了や接続設定の
+// 切替で破棄されると finally の Release が ObjectDisposedException になるが、呼び出し元は
+// 同期の Closed ハンドラから来るため取得の完了を待てない。SemaphoreSlim の Dispose が要る
+// のは AvailableWaitHandle を使った場合だけで、本クラスは触っていない
+public sealed class SupabasePasswordSession : ISupabaseSession
 {
     // token の有効期限ぎりぎりの再利用で 401 になるのを避けるための前倒し幅
     private static readonly TimeSpan ExpiryMargin = TimeSpan.FromSeconds(60);
@@ -108,11 +113,6 @@ public sealed class SupabasePasswordSession : ISupabaseSession, IDisposable
             ref _state,
             current with { ExpiresAt = DateTimeOffset.MinValue },
             current);
-    }
-
-    public void Dispose()
-    {
-        _gate.Dispose();
     }
 
     private bool IsUsable([NotNullWhen(true)] TokenState? state) =>

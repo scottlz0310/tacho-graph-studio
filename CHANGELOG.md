@@ -13,6 +13,7 @@
   - `Core.Roster`: `PostgRestRosterClient` / `PostgRestVendorClient` は anon キーではなく `ISupabaseSession` を受け取り、`Authorization` に access token、`apikey` に anon キーを送る。401/403 のときは token 失効の可能性があるため一度だけ token を取り直して再送する。読み取り専用（FR-09）は維持
   - 認証エラーは `SupabaseAuthenticationException` として名簿パネルへ理由を表示する。ネットワーク不通（`HttpRequestException`）は従来どおりオフラインキャッシュへフォールバックし、認証失敗と区別する
   - `Core.Settings`: `SupabaseCredentials` にメールアドレス・パスワードを追加。接続確認は `IsValidAsync`（真偽値）から `ValidateAsync`（`SupabaseConnectionResult`）へ変更し、認証失敗・権限不足・接続不可を利用者へ区別して表示する
+  - `SupabasePasswordSession` は**破棄を必要としない設計**とした。token 取得中（gate 保持中）にウィンドウ終了や接続設定の切替で破棄されると `finally` の `SemaphoreSlim.Release` が `ObjectDisposedException` になるが、同期の `Closed` ハンドラから呼ばれるため取得の完了を待てない。`SemaphoreSlim` の破棄が必要なのは `AvailableWaitHandle` を使った場合だけで、本クラスは触っていない
   - App: 秘匿ストア（DPAPI）のフォーマットを version 2 へ更新。**保存済みの version 1 は読み込まず「接続設定が無効」として再入力を促す**。どのみちアカウントの入力が必須なため、移行専用の分岐は設けない
 
 ## [0.1.6] - 2026-07-26

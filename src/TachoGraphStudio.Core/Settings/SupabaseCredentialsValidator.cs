@@ -22,7 +22,7 @@ public sealed class SupabaseCredentialsValidator
     {
         ArgumentNullException.ThrowIfNull(credentials);
 
-        using SupabasePasswordSession session = new(
+        SupabasePasswordSession session = new(
             _httpClient,
             credentials.ProjectUrl,
             credentials.AnonKey,

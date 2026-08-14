@@ -16,7 +16,7 @@ public sealed class SupabasePasswordSessionTests
     {
         RecordingHandler handler = new(_ => TokenResponse("token-1", "refresh-1", expiresIn: 3600));
         using HttpClient httpClient = new(handler);
-        using SupabasePasswordSession session = CreateSession(httpClient, projectUrl);
+        SupabasePasswordSession session = CreateSession(httpClient, projectUrl);
 
         string accessToken = await session.GetAccessTokenAsync(CancellationToken.None);
 
@@ -36,7 +36,7 @@ public sealed class SupabasePasswordSessionTests
         RecordingHandler handler = new(_ => TokenResponse("token-1", "refresh-1", expiresIn: 3600));
         using HttpClient httpClient = new(handler);
         MutableTimeProvider timeProvider = new(SignInAt);
-        using SupabasePasswordSession session = CreateSession(httpClient, timeProvider: timeProvider);
+        SupabasePasswordSession session = CreateSession(httpClient, timeProvider: timeProvider);
 
         Assert.Equal("token-1", await session.GetAccessTokenAsync(CancellationToken.None));
         timeProvider.Advance(TimeSpan.FromMinutes(30));
@@ -54,7 +54,7 @@ public sealed class SupabasePasswordSessionTests
             : TokenResponse("token-2", "refresh-2", expiresIn: 3600));
         using HttpClient httpClient = new(handler);
         MutableTimeProvider timeProvider = new(SignInAt);
-        using SupabasePasswordSession session = CreateSession(httpClient, timeProvider: timeProvider);
+        SupabasePasswordSession session = CreateSession(httpClient, timeProvider: timeProvider);
 
         await session.GetAccessTokenAsync(CancellationToken.None);
         timeProvider.Advance(TimeSpan.FromHours(1));
@@ -78,7 +78,7 @@ public sealed class SupabasePasswordSessionTests
         });
         using HttpClient httpClient = new(handler);
         MutableTimeProvider timeProvider = new(SignInAt);
-        using SupabasePasswordSession session = CreateSession(httpClient, timeProvider: timeProvider);
+        SupabasePasswordSession session = CreateSession(httpClient, timeProvider: timeProvider);
 
         await session.GetAccessTokenAsync(CancellationToken.None);
         timeProvider.Advance(TimeSpan.FromHours(1));
@@ -98,7 +98,7 @@ public sealed class SupabasePasswordSessionTests
             ? TokenResponse("token-1", "refresh-1", expiresIn: 3600)
             : TokenResponse("token-2", "refresh-2", expiresIn: 3600));
         using HttpClient httpClient = new(handler);
-        using SupabasePasswordSession session = CreateSession(httpClient);
+        SupabasePasswordSession session = CreateSession(httpClient);
 
         string first = await session.GetAccessTokenAsync(CancellationToken.None);
         session.Invalidate(first);
@@ -114,7 +114,7 @@ public sealed class SupabasePasswordSessionTests
     {
         RecordingHandler handler = new(_ => TokenResponse("token-1", "refresh-1", expiresIn: 3600));
         using HttpClient httpClient = new(handler);
-        using SupabasePasswordSession session = CreateSession(httpClient);
+        SupabasePasswordSession session = CreateSession(httpClient);
 
         await session.GetAccessTokenAsync(CancellationToken.None);
         session.Invalidate("token-0");
@@ -135,7 +135,7 @@ public sealed class SupabasePasswordSessionTests
         const string responseBody = """{ "error_description": "Invalid login credentials" }""";
         RecordingHandler handler = new(_ => JsonResponse(statusCode, responseBody));
         using HttpClient httpClient = new(handler);
-        using SupabasePasswordSession session = CreateSession(httpClient);
+        SupabasePasswordSession session = CreateSession(httpClient);
 
         SupabaseAuthenticationException exception =
             await Assert.ThrowsAsync<SupabaseAuthenticationException>(
@@ -152,7 +152,7 @@ public sealed class SupabasePasswordSessionTests
     {
         RecordingHandler handler = new(_ => JsonResponse(statusCode, "error"));
         using HttpClient httpClient = new(handler);
-        using SupabasePasswordSession session = CreateSession(httpClient);
+        SupabasePasswordSession session = CreateSession(httpClient);
 
         HttpRequestException exception = await Assert.ThrowsAsync<HttpRequestException>(
             () => session.GetAccessTokenAsync(CancellationToken.None));
@@ -167,7 +167,7 @@ public sealed class SupabasePasswordSessionTests
     {
         RecordingHandler handler = new(_ => JsonResponse(HttpStatusCode.OK, responseJson));
         using HttpClient httpClient = new(handler);
-        using SupabasePasswordSession session = CreateSession(httpClient);
+        SupabasePasswordSession session = CreateSession(httpClient);
 
         await Assert.ThrowsAsync<SupabaseAuthenticationException>(
             () => session.GetAccessTokenAsync(CancellationToken.None));
@@ -178,10 +178,51 @@ public sealed class SupabasePasswordSessionTests
     {
         RecordingHandler handler = new(_ => JsonResponse(HttpStatusCode.OK, "<html>not json</html>"));
         using HttpClient httpClient = new(handler);
-        using SupabasePasswordSession session = CreateSession(httpClient);
+        SupabasePasswordSession session = CreateSession(httpClient);
 
         await Assert.ThrowsAsync<SupabaseAuthenticationException>(
             () => session.GetAccessTokenAsync(CancellationToken.None));
+    }
+
+    // ウィンドウ終了・接続設定切替は token 取得中(gate 保持中)でも起こり、同期の Closed
+    // ハンドラは取得の完了を待てない。破棄を必要とする設計だと finally の Release が
+    // ObjectDisposedException になるため、破棄不要であることを契約として固定する(PR #108 レビュー指摘)
+    [Fact]
+    public void Session_DoesNotRequireDisposal()
+    {
+        using HttpClient httpClient = new();
+
+        SupabasePasswordSession session = CreateSession(httpClient);
+
+        Assert.IsNotAssignableFrom<IDisposable>(session);
+    }
+
+    [Fact]
+    public async Task GetAccessTokenAsync_ConcurrentCallsShareOneSignIn()
+    {
+        TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int requestCount = 0;
+        GatedHandler handler = new(async () =>
+        {
+            Interlocked.Increment(ref requestCount);
+            entered.TrySetResult();
+            await release.Task;
+            return TokenResponse("token-1", "refresh-1", expiresIn: 3600);
+        });
+        using HttpClient httpClient = new(handler);
+        SupabasePasswordSession session = CreateSession(httpClient);
+
+        Task<string> first = session.GetAccessTokenAsync(CancellationToken.None);
+        // 1 本目が gate を保持して HTTP 待ちに入ってから 2 本目を開始する
+        await entered.Task;
+        Task<string> second = session.GetAccessTokenAsync(CancellationToken.None);
+        release.SetResult();
+
+        string[] tokens = await Task.WhenAll(first, second);
+
+        Assert.Equal(["token-1", "token-1"], tokens);
+        Assert.Equal(1, requestCount);
     }
 
     [Theory]
@@ -259,6 +300,14 @@ public sealed class SupabasePasswordSessionTests
         public override DateTimeOffset GetUtcNow() => _utcNow;
 
         public void Advance(TimeSpan delta) => _utcNow += delta;
+    }
+
+    // 応答を任意のタイミングまで保留できるハンドラ。gate 保持中の並行呼び出しを再現する
+    private sealed class GatedHandler(Func<Task<HttpResponseMessage>> responseFactory) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) => responseFactory();
     }
 
     private sealed class RecordingHandler(

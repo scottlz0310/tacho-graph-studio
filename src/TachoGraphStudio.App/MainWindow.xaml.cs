@@ -35,7 +35,7 @@ public sealed partial class MainWindow : Window
     private readonly TemplateSelectionComboBoxController _templateSelectionController;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
     // 名簿・業者マスタで token を共有するため、接続設定ごとに 1 つだけ保持する(#107)
-    private SupabasePasswordSession? _supabaseSession;
+    private ISupabaseSession? _supabaseSession;
 
     public MainWindow()
     {
@@ -343,9 +343,6 @@ public sealed partial class MainWindow : Window
         // 終了時の最終保存。fault は AppStateSaver 内で捕捉され、タイムアウトも false として
         // 明示的に扱われる(UI スレッドへ throw しない)。失敗理由はトレースログへ伝播する
         AppStateSaver.TryFlush(CaptureAppState(), TimeSpan.FromSeconds(2));
-
-        _supabaseSession?.Dispose();
-        _supabaseSession = null;
     }
 
     private Task SaveAppStateAsync() => AppStateSaver.TrySaveAsync(CaptureAppState());
@@ -479,7 +476,6 @@ public sealed partial class MainWindow : Window
 
         RosterViewModel.IsCredentialsInvalid = isInvalid;
 
-        _supabaseSession?.Dispose();
         _supabaseSession = null;
 
         if (credentials is null)
