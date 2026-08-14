@@ -20,6 +20,7 @@ public sealed partial class StageViewModel : ObservableObject
     private readonly IImageSourceFactory _imageSourceFactory;
     private readonly IStagePipeline _pipeline;
     private readonly ITemplateStore _templateStore;
+    private int _exportDpi = DiscComposer.DefaultDpi;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedDisc))]
@@ -70,6 +71,26 @@ public sealed partial class StageViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave))]
     public partial StoredTemplate? SelectedTemplate { get; set; }
+
+    // 出力画像の選択肢。取り込み・検出は常に600dpi基準で行い、保存時だけ縮小する(#101)
+    public IReadOnlyList<int> ExportDpiOptions { get; } = [100, 200, 300, DiscComposer.DefaultDpi];
+
+    public int ExportDpi
+    {
+        get => _exportDpi;
+        set
+        {
+            if (!ExportDpiOptions.Contains(value))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(value),
+                    value,
+                    "出力 DPI は 100 / 200 / 300 / 600 のいずれかを指定してください。");
+            }
+
+            SetProperty(ref _exportDpi, value);
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasTemplateWarning))]
@@ -292,13 +313,24 @@ public sealed partial class StageViewModel : ObservableObject
             skipHandwritten);
         double angle = item.RotationAngle;
         ProcessedDisc disc = item.Disc;
+        int outputDpi = ExportDpi;
+        bool includePhysicalResolution = Path.GetExtension(disc.SourcePath)
+            .Equals(".pdf", StringComparison.OrdinalIgnoreCase);
 
         IsSaving = true;
         SaveError = null;
         try
         {
             byte[] png = await Task.Run(
-                () => DiscComposer.ComposePng(disc.Bgra, disc.Width, disc.Height, angle, template, values),
+                () => DiscComposer.ComposePng(
+                    disc.Bgra,
+                    disc.Width,
+                    disc.Height,
+                    angle,
+                    template,
+                    values,
+                    outputDpi,
+                    includePhysicalResolution),
                 cancellationToken);
 
             Directory.CreateDirectory(outputDirectory);

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
@@ -38,7 +39,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new()
         {
-            Discs = [.. Enumerable.Range(0, discCount).Select(BuildDisc)],
+            Discs = [.. Enumerable.Range(0, discCount).Select(index => BuildDisc(index))],
         };
         StageViewModel viewModel = CreateViewModel(pipeline);
 
@@ -672,6 +673,30 @@ public sealed class StageViewModelTests : IDisposable
         Assert.False(viewModel.HasSaveError);
     }
 
+    [Theory]
+    [InlineData("sheet.pdf", true)]
+    [InlineData("sheet.jpg", false)]
+    public async Task SaveAndAdvanceAsync_UsesSelectedDpiAndOnlyKnownInputsGetPhysicalResolution(
+        string sourcePath,
+        bool expectedPhysicalResolution)
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0, sourcePath)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        viewModel.ExportDpi = 300;
+        await viewModel.ImportAsync([sourcePath]);
+        viewModel.SelectedTemplate = BuildStoredTemplate();
+        viewModel.OutputDirectory = _temporaryDirectory;
+
+        Assert.True(await viewModel.SaveAndAdvanceAsync());
+
+        string outputPath = Path.Combine(_temporaryDirectory, "20260719__.png");
+        byte[] png = await File.ReadAllBytesAsync(outputPath);
+        (int width, int height, bool hasPhysicalResolution) = ReadPngInfo(png);
+        Assert.Equal(1, width);
+        Assert.Equal(1, height);
+        Assert.Equal(expectedPhysicalResolution, hasPhysicalResolution);
+    }
+
     [Fact]
     public async Task SaveAndAdvanceAsync_SkipHandwrittenRetainsDriverAndAddsSuffix()
     {
@@ -865,8 +890,8 @@ public sealed class StageViewModelTests : IDisposable
         },
     };
 
-    private static ProcessedDisc BuildDisc(int indexInSheet) => new(
-        SourcePath: "sheet.pdf",
+    private static ProcessedDisc BuildDisc(int indexInSheet, string sourcePath = "sheet.pdf") => new(
+        SourcePath: sourcePath,
         PageIndex: 0,
         IndexInSheet: indexInSheet,
         Width: 2,
@@ -877,6 +902,27 @@ public sealed class StageViewModelTests : IDisposable
         ThumbnailPremultipliedBgra: new byte[4],
         EllipseCenterX: 1.0,
         EllipseCenterY: 1.0);
+
+    private static (int Width, int Height, bool HasPhysicalResolution) ReadPngInfo(byte[] png)
+    {
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, png[..4]);
+        int width = checked((int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(16, 4)));
+        int height = checked((int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(20, 4)));
+
+        bool hasPhysicalResolution = false;
+        int offset = 8;
+        while (offset + 12 <= png.Length)
+        {
+            int length = checked((int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(offset, 4)));
+            hasPhysicalResolution |= png[offset + 4] == (byte)'p'
+                && png[offset + 5] == (byte)'H'
+                && png[offset + 6] == (byte)'Y'
+                && png[offset + 7] == (byte)'s';
+            offset = checked(offset + 12 + length);
+        }
+
+        return (width, height, hasPhysicalResolution);
+    }
 
     private sealed class FakeStagePipeline : IStagePipeline
     {

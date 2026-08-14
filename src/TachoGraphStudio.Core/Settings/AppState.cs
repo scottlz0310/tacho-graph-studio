@@ -12,6 +12,9 @@ public sealed record AppState
     // 選択していたチャート紙様式のテンプレート ID(ITemplateStore の ID)
     public string? SelectedTemplateId { get; init; }
 
+    // PNG 書き出し DPI。null は現行の既定値(600dpi)を表す
+    public int? ExportDpi { get; init; }
+
     public double? SidebarWidth { get; init; }
 
     public WindowPlacement? Window { get; init; }
