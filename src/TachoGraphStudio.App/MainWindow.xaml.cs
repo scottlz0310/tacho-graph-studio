@@ -228,6 +228,12 @@ public sealed partial class MainWindow : Window
             StageViewModel.TargetDate = lastTargetDate;
         }
 
+        if (state.ExportDpi is { } exportDpi
+            && StageViewModel.ExportDpiOptions.Contains(exportDpi))
+        {
+            StageViewModel.ExportDpi = exportDpi;
+        }
+
         if (state.SidebarWidth is { } sidebarWidth && double.IsFinite(sidebarWidth))
         {
             SidebarColumn.Width = new GridLength(
@@ -299,6 +305,7 @@ public sealed partial class MainWindow : Window
         {
             if (e.PropertyName is nameof(StageViewModel.OutputDirectory)
                 or nameof(StageViewModel.TargetDate)
+                or nameof(StageViewModel.ExportDpi)
                 or nameof(StageViewModel.SelectedTemplate))
             {
                 RequestSaveAppState();
@@ -359,6 +366,7 @@ public sealed partial class MainWindow : Window
             OutputDirectory = StageViewModel.OutputDirectory,
             LastTargetDate = StageViewModel.TargetDate,
             SelectedTemplateId = StageViewModel.SelectedTemplate?.Id,
+            ExportDpi = StageViewModel.ExportDpi,
             SidebarWidth = SidebarColumn.ActualWidth,
             Window = _windowPlacementTracker.Capture(isMaximized),
         };

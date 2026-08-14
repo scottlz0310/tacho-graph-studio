@@ -68,6 +68,95 @@ public sealed class DiscComposerTests
     }
 
     [Fact]
+    public void ComposePng_ScalesTextWithOutput()
+    {
+        (byte[] bgra, int width, int height) = BuildSolidSource(400, 400);
+        ChartTemplate template = new()
+        {
+            Name = "Test",
+            Fields = new Dictionary<string, TextFieldDefinition>
+            {
+                ["driver"] = new()
+                {
+                    Position = new TextPosition { XRatio = 0.5, YRatio = 0.5 },
+                    Font = new TextFont { Family = "Arial", SizeRatio = 0.1, Color = "#0000ff" },
+                    Align = TextAlignment.Center,
+                    VerticalAlign = VerticalTextAlignment.Middle,
+                },
+            },
+        };
+
+        byte[] png = DiscComposer.ComposePng(
+            bgra,
+            width,
+            height,
+            0.0,
+            template,
+            new ChartTextValues { Driver = "山田" },
+            outputDpi: 300);
+
+        using SKBitmap decoded = DecodeUnpremul(png, 200, 200);
+        Assert.True(CountPixels(decoded, 50, 150, 50, 150, color => color is { Blue: > 200, Red: < 50, Alpha: > 200 }) > 5);
+    }
+
+    [Theory]
+    [InlineData(600, 600)]
+    [InlineData(300, 300)]
+    [InlineData(200, 200)]
+    [InlineData(100, 100)]
+    public void ComposePng_ResizesToRequestedDpi(int outputDpi, int expectedSize)
+    {
+        (byte[] bgra, int width, int height) = BuildSolidSource(600, 600);
+
+        byte[] png = DiscComposer.ComposePng(
+            bgra,
+            width,
+            height,
+            0.0,
+            template: null,
+            values: null,
+            outputDpi: outputDpi);
+
+        using SKBitmap decoded = DecodeUnpremul(png, expectedSize, expectedSize);
+        Assert.Equal(255, decoded.GetPixel(expectedSize / 2, expectedSize / 2).Red);
+    }
+
+    [Theory]
+    [InlineData(100, 3937u)]
+    [InlineData(200, 7874u)]
+    [InlineData(300, 11811u)]
+    [InlineData(600, 23622u)]
+    public void ComposePng_EmbedsPhysicalResolution(int outputDpi, uint expectedPixelsPerMeter)
+    {
+        (byte[] bgra, int width, int height) = BuildSource(64, 64);
+
+        byte[] png = DiscComposer.ComposePng(
+            bgra,
+            width,
+            height,
+            0.0,
+            template: null,
+            values: null,
+            outputDpi: outputDpi,
+            includePhysicalResolution: true);
+
+        (uint x, uint y, byte unit) = ReadPhysicalResolution(png);
+        Assert.Equal(expectedPixelsPerMeter, x);
+        Assert.Equal(expectedPixelsPerMeter, y);
+        Assert.Equal(1, unit);
+    }
+
+    [Fact]
+    public void ComposePng_DoesNotEmbedPhysicalResolutionByDefault()
+    {
+        (byte[] bgra, int width, int height) = BuildSource(64, 64);
+
+        byte[] png = DiscComposer.ComposePng(bgra, width, height, 0.0, null, null);
+
+        Assert.Throws<InvalidOperationException>(() => ReadPhysicalResolution(png));
+    }
+
+    [Fact]
     public void ComposePng_SkipsTextWhenTemplateOrValuesMissing()
     {
         (byte[] bgra, int width, int height) = BuildSource(64, 64);
@@ -106,6 +195,18 @@ public sealed class DiscComposerTests
         return (bgra, width, height);
     }
 
+    private static (byte[] Bgra, int Width, int Height) BuildSolidSource(int width, int height)
+    {
+        byte[] bgra = new byte[width * height * 4];
+        for (int offset = 0; offset < bgra.Length; offset += 4)
+        {
+            bgra[offset + 2] = 255;
+            bgra[offset + 3] = 255;
+        }
+
+        return (bgra, width, height);
+    }
+
     private static void SetPixel(
         byte[] bgra, int width, int x, int y, byte blue, byte green, byte red, byte alpha)
     {
@@ -141,5 +242,30 @@ public sealed class DiscComposerTests
         }
 
         return count;
+    }
+
+    private static (uint X, uint Y, byte Unit) ReadPhysicalResolution(byte[] png)
+    {
+        int offset = 8;
+        while (offset + 12 <= png.Length)
+        {
+            int length = checked((int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(
+                png.AsSpan(offset, 4)));
+            if (png[offset + 4] == (byte)'p'
+                && png[offset + 5] == (byte)'H'
+                && png[offset + 6] == (byte)'Y'
+                && png[offset + 7] == (byte)'s')
+            {
+                Assert.Equal(9, length);
+                return (
+                    System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(offset + 8, 4)),
+                    System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(offset + 12, 4)),
+                    png[offset + 16]);
+            }
+
+            offset = checked(offset + 12 + length);
+        }
+
+        throw new InvalidOperationException("PNG に pHYs チャンクがありません。");
     }
 }

@@ -19,6 +19,7 @@ public sealed class JsonAppStateStoreTests : IDisposable
             OutputDirectory = @"C:\TestData\Pictures\タコチャート",
             LastTargetDate = new DateOnly(2026, 7, 19),
             SelectedTemplateId = "Yazaki45",
+            ExportDpi = 300,
             SidebarWidth = 420.5,
             Window = new WindowPlacement(100, 50, 1440, 900, IsMaximized: false),
         };
@@ -42,6 +43,7 @@ public sealed class JsonAppStateStoreTests : IDisposable
         Assert.Null(restored!.OutputDirectory);
         Assert.Null(restored.LastTargetDate);
         Assert.Null(restored.SelectedTemplateId);
+        Assert.Null(restored.ExportDpi);
         Assert.Null(restored.SidebarWidth);
         Assert.Null(restored.Window);
     }
