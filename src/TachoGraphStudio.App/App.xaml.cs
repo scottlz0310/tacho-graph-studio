@@ -26,10 +26,15 @@ public partial class App : Application
         _window.Activate();
     }
 
-    private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+    private async void OnWindowActivated(object sender, WindowActivatedEventArgs args)
     {
         ((Window)sender).Activated -= OnWindowActivated;
         _splashScreen?.Dispose();
         _splashScreen = null;
+
+        if (sender is MainWindow mainWindow)
+        {
+            await mainWindow.ShowUpdateNotesIfNeededAsync();
+        }
     }
 }

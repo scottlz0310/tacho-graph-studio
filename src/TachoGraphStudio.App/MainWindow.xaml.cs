@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -7,12 +9,15 @@ using TachoGraphStudio.App.Roster;
 using TachoGraphStudio.App.Settings;
 using TachoGraphStudio.App.Stage;
 using TachoGraphStudio.App.Templates;
+using TachoGraphStudio.App.Updates;
 using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Imaging;
 using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Settings;
 using TachoGraphStudio.Core.Templates;
+using TachoGraphStudio.Core.Updates;
 
+using Windows.ApplicationModel;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.System;
@@ -30,8 +35,11 @@ public sealed partial class MainWindow : Window
     private readonly HttpClient _httpClient = new();
     private readonly ISecretStore _secretStore;
     private readonly WindowPlacementTracker _windowPlacementTracker = new();
+    private readonly TaskCompletionSource _initializationCompleted = new(
+        TaskCreationOptions.RunContinuationsAsynchronously);
 
     private bool _isAppStateTrackingEnabled;
+    private string? _lastShownVersion;
     private readonly TemplateSelectionComboBoxController _templateSelectionController;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
     // 名簿・業者マスタで token を共有するため、接続設定ごとに 1 つだけ保持する(#107)
@@ -179,23 +187,30 @@ public sealed partial class MainWindow : Window
 
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
-        // アプリ状態の復元(FR-22)。読込失敗時は既定値で継続する
-        AppState? appState = await TryReadAppStateAsync();
-        ApplyAppState(appState);
+        try
+        {
+            // アプリ状態の復元(FR-22)。読込失敗時は既定値で継続する
+            AppState? appState = await TryReadAppStateAsync();
+            ApplyAppState(appState);
 
-        TargetDatePicker.Date = new DateTimeOffset(
-            StageViewModel.TargetDate.ToDateTime(TimeOnly.MinValue));
+            TargetDatePicker.Date = new DateTimeOffset(
+                StageViewModel.TargetDate.ToDateTime(TimeOnly.MinValue));
 
-        await RosterViewModel.LoadFilterSettingsAsync();
-        ApplyFilterSettingsToControls();
+            await RosterViewModel.LoadFilterSettingsAsync();
+            ApplyFilterSettingsToControls();
 
-        await StageViewModel.LoadTemplatesAsync();
-        ApplySavedTemplateSelection(appState?.SelectedTemplateId);
+            await StageViewModel.LoadTemplatesAsync();
+            ApplySavedTemplateSelection(appState?.SelectedTemplateId);
 
-        // 復元が終わってから変更追跡を開始する(復元途中の保存を避ける)
-        StartAppStateTracking();
+            // 復元が終わってから変更追跡を開始する(復元途中の保存を避ける)
+            StartAppStateTracking();
 
-        await RefreshSupabaseConnectionAsync(promptIfUnset: true);
+            await RefreshSupabaseConnectionAsync(promptIfUnset: true);
+        }
+        finally
+        {
+            _initializationCompleted.TrySetResult();
+        }
     }
 
     private async Task<AppState?> TryReadAppStateAsync()
@@ -217,6 +232,8 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+
+        _lastShownVersion = state.LastShownVersion;
 
         if (state.OutputDirectory is { } outputDirectory && Directory.Exists(outputDirectory))
         {
@@ -271,6 +288,96 @@ public sealed partial class MainWindow : Window
             presenter.Maximize();
         }
     }
+
+    internal async Task ShowUpdateNotesIfNeededAsync()
+    {
+        await _initializationCompleted.Task;
+
+        try
+        {
+            if (!TryGetCurrentPackageVersion(out Version? currentVersion)
+                || currentVersion is null)
+            {
+                return;
+            }
+
+            string currentVersionText = FormatVersion(currentVersion);
+            if (_lastShownVersion is null)
+            {
+                // 新規インストールでは変更履歴を表示せず、基準バージョンだけ記録する
+                _lastShownVersion = currentVersionText;
+                await AppStateSaver.TrySaveAsync(CaptureAppState());
+                return;
+            }
+
+            Version? lastShownVersion = ParseVersion(_lastShownVersion);
+            if (lastShownVersion is not null && lastShownVersion >= currentVersion)
+            {
+                return;
+            }
+
+            string changelogPath = Path.Combine(AppContext.BaseDirectory, "CHANGELOG.md");
+            string changelog = await File.ReadAllTextAsync(changelogPath);
+            IReadOnlyList<ChangelogSection> sections = ChangelogParser.SelectSections(
+                changelog,
+                lastShownVersion,
+                currentVersion);
+            if (sections.Count == 0)
+            {
+                return;
+            }
+
+            UpdateNotesDialog dialog = new(
+                sections,
+                new Uri(
+                    $"https://github.com/scottlz0310/tacho-graph-studio/releases/tag/v{currentVersionText}"));
+            dialog.XamlRoot = Content.XamlRoot;
+            await dialog.ShowAsync();
+
+            _lastShownVersion = currentVersionText;
+            await AppStateSaver.TrySaveAsync(CaptureAppState());
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // 更新通知は装飾機能のため、パッケージ外実行やファイル欠落で起動を止めない
+            Trace.WriteLine($"更新内容の表示をスキップしました: {exception.Message}");
+        }
+    }
+
+    private static bool TryGetCurrentPackageVersion(out Version? version)
+    {
+        try
+        {
+            var packageVersion = Package.Current.Id.Version;
+            version = new Version(
+                packageVersion.Major,
+                packageVersion.Minor,
+                packageVersion.Build);
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Trace.WriteLine($"パッケージバージョンを取得できないため更新内容を表示しません: {exception.Message}");
+            version = null;
+            return false;
+        }
+    }
+
+    private static Version? ParseVersion(string versionText)
+    {
+        if (!Version.TryParse(versionText, out Version? parsed) || parsed is null)
+        {
+            return null;
+        }
+
+        return new Version(
+            parsed.Major,
+            Math.Max(parsed.Minor, 0),
+            Math.Max(parsed.Build, 0));
+    }
+
+    private static string FormatVersion(Version version) =>
+        $"{version.Major}.{version.Minor}.{version.Build}";
 
     private void ApplySavedTemplateSelection(string? templateId)
     {
@@ -367,6 +474,7 @@ public sealed partial class MainWindow : Window
             LastTargetDate = StageViewModel.TargetDate,
             SelectedTemplateId = StageViewModel.SelectedTemplate?.Id,
             ExportDpi = StageViewModel.ExportDpi,
+            LastShownVersion = _lastShownVersion,
             SidebarWidth = SidebarColumn.ActualWidth,
             Window = _windowPlacementTracker.Capture(isMaximized),
         };

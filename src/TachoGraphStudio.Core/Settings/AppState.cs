@@ -15,6 +15,9 @@ public sealed record AppState
     // PNG 書き出し DPI。null は現行の既定値(600dpi)を表す
     public int? ExportDpi { get; init; }
 
+    // 更新後の変更点を最後に表示したパッケージバージョン。null は未記録を表す
+    public string? LastShownVersion { get; init; }
+
     public double? SidebarWidth { get; init; }
 
     public WindowPlacement? Window { get; init; }

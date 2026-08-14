@@ -9,6 +9,7 @@
 ### Added
 
 - **PNG 書き出し DPI の選択**（#101）。100 / 200 / 300 / 600dpi を選べるようにし、PDF 入力では600dpi基準の取り込み・検出を維持したまま保存時に縮小する。PDF の出力には `pHYs` を付与して実寸配置を保ち、DPI 不明の画像入力では選択値の倍率だけを適用して `pHYs` は付与しない。選択値はアプリ状態へ保存する
+- **更新後の変更点ダイアログ**（#100）。パッケージ更新後の初回起動時に、前回表示以降の CHANGELOG を一度だけ表示する。新規インストールでは現在バージョンだけを記録し、変更点は表示しない
 
 ### Changed
 
@@ -19,6 +20,10 @@
   - `Core.Settings`: `SupabaseCredentials` にメールアドレス・パスワードを追加。接続確認は `IsValidAsync`（真偽値）から `ValidateAsync`（`SupabaseConnectionResult`）へ変更し、認証失敗・権限不足・接続不可を利用者へ区別して表示する
   - `SupabasePasswordSession` は**破棄を必要としない設計**とした。token 取得中（gate 保持中）にウィンドウ終了や接続設定の切替で破棄されると `finally` の `SemaphoreSlim.Release` が `ObjectDisposedException` になるが、同期の `Closed` ハンドラから呼ばれるため取得の完了を待てない。`SemaphoreSlim` の破棄が必要なのは `AvailableWaitHandle` を使った場合だけで、本クラスは触っていない
   - App: 秘匿ストア（DPAPI）のフォーマットを version 2 へ更新。**保存済みの version 1 は読み込まず「接続設定が無効」として再入力を促す**。どのみちアカウントの入力が必須なため、移行専用の分岐は設けない
+
+### Fixed
+
+- **WindowsPdfRasterizerTests の後片付け**（#109）。Windows.Data.Pdf の一時的なファイルロックと競合した場合に、短いリトライ後にベストエフォートで一時ディレクトリを削除するようにした
 
 ## [0.1.6] - 2026-07-26
 
