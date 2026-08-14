@@ -31,6 +31,7 @@ namespace TachoGraphStudio.App;
 public sealed partial class MainWindow : Window
 {
     private readonly IAppStateStore _appStateStore;
+    private readonly string _appStatePath;
     private readonly SupabaseCredentialsValidator _credentialsValidator;
     private readonly HttpClient _httpClient = new();
     private readonly ISecretStore _secretStore;
@@ -39,6 +40,7 @@ public sealed partial class MainWindow : Window
         TaskCreationOptions.RunContinuationsAsynchronously);
 
     private bool _isAppStateTrackingEnabled;
+    private bool _hasPersistedAppState;
     private string? _lastShownVersion;
     private readonly TemplateSelectionComboBoxController _templateSelectionController;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
@@ -56,8 +58,8 @@ public sealed partial class MainWindow : Window
         string localCacheFolderPath = ApplicationData.Current.LocalCacheFolder.Path;
         string localFolderPath = ApplicationData.Current.LocalFolder.Path;
 
-        _appStateStore = new JsonAppStateStore(
-            Path.Combine(localFolderPath, "settings", "app-state.json"));
+        _appStatePath = Path.Combine(localFolderPath, "settings", "app-state.json");
+        _appStateStore = new JsonAppStateStore(_appStatePath);
         // 変更通知(InfoBar の DP 更新)を UI スレッドへ marshal する。終了時 flush は
         // ワーカースレッドで走るため必須。キュー停止後(シャットダウン中)は通知を破棄する
         AppStateSaver = new AppStateSaver(
@@ -215,6 +217,8 @@ public sealed partial class MainWindow : Window
 
     private async Task<AppState?> TryReadAppStateAsync()
     {
+        _hasPersistedAppState = File.Exists(_appStatePath);
+
         try
         {
             return await _appStateStore.ReadAsync();
@@ -302,7 +306,12 @@ public sealed partial class MainWindow : Window
             }
 
             string currentVersionText = FormatVersion(currentVersion);
-            if (_lastShownVersion is null)
+            Version? lastShownVersion = UpdateNotesVersionPolicy.ResolveLastShownVersion(
+                _lastShownVersion,
+                _hasPersistedAppState);
+            if (UpdateNotesVersionPolicy.IsNewInstallation(
+                    _lastShownVersion,
+                    _hasPersistedAppState))
             {
                 // 新規インストールでは変更履歴を表示せず、基準バージョンだけ記録する
                 _lastShownVersion = currentVersionText;
@@ -310,7 +319,6 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            Version? lastShownVersion = ParseVersion(_lastShownVersion);
             if (lastShownVersion is not null && lastShownVersion >= currentVersion)
             {
                 return;
@@ -361,19 +369,6 @@ public sealed partial class MainWindow : Window
             version = null;
             return false;
         }
-    }
-
-    private static Version? ParseVersion(string versionText)
-    {
-        if (!Version.TryParse(versionText, out Version? parsed) || parsed is null)
-        {
-            return null;
-        }
-
-        return new Version(
-            parsed.Major,
-            Math.Max(parsed.Minor, 0),
-            Math.Max(parsed.Build, 0));
     }
 
     private static string FormatVersion(Version version) =>
