@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
+using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Roster;
 
 namespace TachoGraphStudio.App.Roster;
@@ -195,13 +196,17 @@ public sealed partial class RosterViewModel : ObservableObject
             DataSource = result.Source;
             ApplyFilter();
         }
+        catch (SupabaseAuthenticationException exception)
+        {
+            ErrorMessage = exception.Message;
+        }
         catch (RosterUnavailableException exception)
         {
             ErrorMessage = exception.Message;
         }
         catch (HttpRequestException)
         {
-            ErrorMessage = "Supabase への接続に失敗しました。接続設定(URL・anon キー)を確認してください。";
+            ErrorMessage = "Supabase への接続に失敗しました。接続設定(URL・anon キー・アカウント)を確認してください。";
         }
         catch (JsonException)
         {

@@ -9,7 +9,8 @@ namespace TachoGraphStudio.App.Settings;
 
 public sealed class DpapiSecretStore : ISecretStore, IDisposable
 {
-    private const int CurrentVersion = 1;
+    // version 2 で email / password を追加(#107)。version 1 は再入力を促すため受け付けない
+    private const int CurrentVersion = 2;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -53,7 +54,11 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
             SecretPayload payload = JsonSerializer.Deserialize<SecretPayload>(plainText, SerializerOptions)
                 ?? throw new InvalidDataException("Supabase 資格情報の復号結果が JSON オブジェクトではありません。");
 
-            return SupabaseCredentials.Create(new Uri(payload.ProjectUrl), payload.AnonKey);
+            return SupabaseCredentials.Create(
+                new Uri(payload.ProjectUrl),
+                payload.AnonKey,
+                payload.Email,
+                payload.Password);
         }
         finally
         {
@@ -69,6 +74,8 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
         {
             ProjectUrl = credentials.ProjectUrl.AbsoluteUri,
             AnonKey = credentials.AnonKey,
+            Email = credentials.Email,
+            Password = credentials.Password,
         };
 
         byte[] plainText = JsonSerializer.SerializeToUtf8Bytes(payload, SerializerOptions);
@@ -111,5 +118,11 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
 
         [JsonRequired]
         public string AnonKey { get; init; } = string.Empty;
+
+        [JsonRequired]
+        public string Email { get; init; } = string.Empty;
+
+        [JsonRequired]
+        public string Password { get; init; } = string.Empty;
     }
 }

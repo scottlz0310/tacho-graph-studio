@@ -7,6 +7,7 @@ using TachoGraphStudio.App.Roster;
 using TachoGraphStudio.App.Settings;
 using TachoGraphStudio.App.Stage;
 using TachoGraphStudio.App.Templates;
+using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Imaging;
 using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Settings;
@@ -33,6 +34,8 @@ public sealed partial class MainWindow : Window
     private bool _isAppStateTrackingEnabled;
     private readonly TemplateSelectionComboBoxController _templateSelectionController;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveAppStateTimer;
+    // 名簿・業者マスタで token を共有するため、接続設定ごとに 1 つだけ保持する(#107)
+    private ISupabaseSession? _supabaseSession;
 
     public MainWindow()
     {
@@ -473,6 +476,8 @@ public sealed partial class MainWindow : Window
 
         RosterViewModel.IsCredentialsInvalid = isInvalid;
 
+        _supabaseSession = null;
+
         if (credentials is null)
         {
             RosterViewModel.SetRosterClient(null);
@@ -485,13 +490,22 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RosterViewModel.SetRosterClient(BuildRosterClient(credentials), BuildVendorClient(credentials));
+        _supabaseSession = new SupabasePasswordSession(
+            _httpClient,
+            credentials.ProjectUrl,
+            credentials.AnonKey,
+            credentials.Email,
+            credentials.Password);
+
+        RosterViewModel.SetRosterClient(
+            BuildRosterClient(credentials.ProjectUrl, _supabaseSession),
+            BuildVendorClient(credentials.ProjectUrl, _supabaseSession));
         await RosterViewModel.RefreshAsync();
     }
 
-    private IRosterClient BuildRosterClient(SupabaseCredentials credentials)
+    private IRosterClient BuildRosterClient(Uri projectUrl, ISupabaseSession session)
     {
-        PostgRestRosterClient remoteClient = new(_httpClient, credentials.ProjectUrl, credentials.AnonKey);
+        PostgRestRosterClient remoteClient = new(_httpClient, projectUrl, session);
         JsonRosterCache cache = new(
             Path.Combine(
                 ApplicationData.Current.LocalCacheFolder.Path,
@@ -501,9 +515,9 @@ public sealed partial class MainWindow : Window
         return new CachedRosterClient(remoteClient, cache);
     }
 
-    private IVendorClient BuildVendorClient(SupabaseCredentials credentials)
+    private IVendorClient BuildVendorClient(Uri projectUrl, ISupabaseSession session)
     {
-        PostgRestVendorClient remoteClient = new(_httpClient, credentials.ProjectUrl, credentials.AnonKey);
+        PostgRestVendorClient remoteClient = new(_httpClient, projectUrl, session);
         JsonVendorCache cache = new(
             Path.Combine(
                 ApplicationData.Current.LocalCacheFolder.Path,

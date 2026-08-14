@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 
 using TachoGraphStudio.App.Roster;
+using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Roster;
 
 namespace TachoGraphStudio.App.Tests.Roster;
@@ -21,11 +22,11 @@ public sealed class RosterViewModelTests
     {
         {
             new HttpRequestException("Invalid key.", null, HttpStatusCode.Unauthorized),
-            "Supabase への接続に失敗しました。接続設定(URL・anon キー)を確認してください。"
+            "Supabase への接続に失敗しました。接続設定(URL・anon キー・アカウント)を確認してください。"
         },
         {
             new HttpRequestException("Forbidden.", null, HttpStatusCode.Forbidden),
-            "Supabase への接続に失敗しました。接続設定(URL・anon キー)を確認してください。"
+            "Supabase への接続に失敗しました。接続設定(URL・anon キー・アカウント)を確認してください。"
         },
         {
             new IOException("Cache write failed."),
@@ -97,6 +98,20 @@ public sealed class RosterViewModelTests
 
         Assert.False(viewModel.IsLoading);
         Assert.Equal(expectedMessage, viewModel.ErrorMessage);
+    }
+
+    // 認証失敗は原因が利用者に伝わる必要があるため、汎用メッセージへ丸めずそのまま表示する(#107)
+    [Fact]
+    public async Task RefreshAsync_AuthenticationFailureSurfacesItsMessage()
+    {
+        SupabaseAuthenticationException failure = new(
+            "Supabase の認証に失敗しました。接続設定のメールアドレスとパスワードを確認してください。(HTTP 400)");
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        viewModel.SetRosterClient(new StubRosterClient(failure));
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(failure.Message, viewModel.ErrorMessage);
     }
 
     [Fact]

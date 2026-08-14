@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text;
 
+using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Roster;
+using TachoGraphStudio.Core.Tests.Auth;
 
 namespace TachoGraphStudio.Core.Tests.Roster;
 
@@ -12,7 +14,7 @@ public sealed class PostgRestVendorClientTests
     [Theory]
     [InlineData("https://example.supabase.co")]
     [InlineData("https://example.supabase.co/")]
-    public async Task GetVendorsAsync_SendsReadOnlyRequestAndMapsResponse(string projectUrl)
+    public async Task GetVendorsAsync_SendsAuthenticatedReadOnlyRequestAndMapsResponse(string projectUrl)
     {
         const string responseJson = """
             [
@@ -36,7 +38,7 @@ public sealed class PostgRestVendorClientTests
         PostgRestVendorClient client = new(
             httpClient,
             new Uri(projectUrl),
-            "test-anon-key",
+            new FakeSupabaseSession(),
             new FixedTimeProvider(RetrievedAt));
 
         VendorResult result = await client.GetVendorsAsync(CancellationToken.None);
@@ -47,8 +49,9 @@ public sealed class PostgRestVendorClientTests
             "/rest/v1/vendors?select=code,display_name,ranges:vendor_ctrl_num_ranges(min_ctrl_num,max_ctrl_num)"
             + "&ranges.purpose=eq.view&is_active=eq.true&order=sort_order.asc",
             request.RequestUri?.PathAndQuery);
+        // anon キーではなく Supabase Auth の access token で読む(#107)
         Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
-        Assert.Equal("test-anon-key", request.Headers.Authorization?.Parameter);
+        Assert.Equal("access-token-1", request.Headers.Authorization?.Parameter);
         Assert.Equal("test-anon-key", Assert.Single(request.Headers.GetValues("apikey")));
         Assert.Null(request.Content);
 
@@ -69,7 +72,47 @@ public sealed class PostgRestVendorClientTests
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden)]
+    public async Task GetVendorsAsync_TokenRejectionRetriesOnceWithFreshToken(HttpStatusCode statusCode)
+    {
+        int callCount = 0;
+        RecordingHandler handler = new(_ => ++callCount == 1
+            ? JsonResponse(statusCode, "unauthorized")
+            : JsonResponse(HttpStatusCode.OK, """[{ "code": "arata", "ranges": [] }]"""));
+        using HttpClient httpClient = new(handler);
+        FakeSupabaseSession session = new();
+        PostgRestVendorClient client = new(httpClient, new Uri("https://example.supabase.co"), session);
+
+        VendorResult result = await client.GetVendorsAsync(CancellationToken.None);
+
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("access-token-2", handler.Requests[1].Headers.Authorization?.Parameter);
+        Assert.Equal("access-token-1", Assert.Single(session.InvalidatedTokens));
+        Assert.Single(result.Vendors);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task GetVendorsAsync_PersistentAuthorizationFailureThrowsAuthenticationException(
+        HttpStatusCode statusCode)
+    {
+        RecordingHandler handler = new(_ => JsonResponse(statusCode, "error body"));
+        using HttpClient httpClient = new(handler);
+        PostgRestVendorClient client = new(
+            httpClient,
+            new Uri("https://example.supabase.co"),
+            new FakeSupabaseSession());
+
+        SupabaseAuthenticationException exception =
+            await Assert.ThrowsAsync<SupabaseAuthenticationException>(
+                () => client.GetVendorsAsync(CancellationToken.None));
+
+        Assert.Contains("業者マスタ", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadRequest)]
     public async Task GetVendorsAsync_NonSuccessStatusThrows(HttpStatusCode statusCode)
     {
         RecordingHandler handler = new(_ => JsonResponse(statusCode, "error body"));
@@ -77,7 +120,7 @@ public sealed class PostgRestVendorClientTests
         PostgRestVendorClient client = new(
             httpClient,
             new Uri("https://example.supabase.co"),
-            "test-anon-key");
+            new FakeSupabaseSession());
 
         HttpRequestException exception = await Assert.ThrowsAsync<HttpRequestException>(
             () => client.GetVendorsAsync(CancellationToken.None));
@@ -96,7 +139,7 @@ public sealed class PostgRestVendorClientTests
         PostgRestVendorClient client = new(
             httpClient,
             new Uri("https://example.supabase.co"),
-            "test-anon-key");
+            new FakeSupabaseSession());
 
         VendorResult result = await client.GetVendorsAsync(CancellationToken.None);
 
@@ -104,17 +147,15 @@ public sealed class PostgRestVendorClientTests
         Assert.Equal(string.Empty, vendor.DisplayName);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_BlankAnonKeyThrows(string anonKey)
+    [Fact]
+    public void Constructor_NullSessionThrows()
     {
         using HttpClient httpClient = new();
 
-        Assert.Throws<ArgumentException>(() => new PostgRestVendorClient(
+        Assert.Throws<ArgumentNullException>(() => new PostgRestVendorClient(
             httpClient,
             new Uri("https://example.supabase.co"),
-            anonKey));
+            null!));
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json)
