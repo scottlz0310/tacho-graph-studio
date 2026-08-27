@@ -10,7 +10,7 @@ public sealed class SupabaseCredentialsValidatorTests
     private static readonly SupabaseCredentials Credentials = SupabaseCredentials.Create(
         new Uri("https://example.supabase.co"),
         "test-anon-key",
-        "shared@example.com",
+        "test-vendor",
         "test-password");
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class SupabaseCredentialsValidatorTests
         SupabaseConnectionResult result = await validator.ValidateAsync(Credentials, CancellationToken.None);
 
         Assert.False(result.IsValid);
-        Assert.Contains("メールアドレスとパスワード", result.ErrorMessage!, StringComparison.Ordinal);
+        Assert.Contains("業者コードとパスワード", result.ErrorMessage!, StringComparison.Ordinal);
     }
 
     [Theory]

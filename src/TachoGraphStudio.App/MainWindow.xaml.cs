@@ -34,6 +34,7 @@ public sealed partial class MainWindow : Window
     private readonly string _appStatePath;
     private readonly SupabaseCredentialsValidator _credentialsValidator;
     private readonly HttpClient _httpClient = new();
+    private readonly ILoginVendorClient _loginVendorClient;
     private readonly ISecretStore _secretStore;
     private readonly WindowPlacementTracker _windowPlacementTracker = new();
     private readonly TaskCompletionSource _initializationCompleted = new(
@@ -69,6 +70,7 @@ public sealed partial class MainWindow : Window
         _secretStore = new DpapiSecretStore(
             Path.Combine(localCacheFolderPath, "secrets", "supabase.secret.json"));
         _credentialsValidator = new SupabaseCredentialsValidator(_httpClient);
+        _loginVendorClient = new PostgRestLoginVendorClient(_httpClient);
 
         RosterViewModel = new RosterViewModel(
             new JsonRosterFilterSettingsStore(
@@ -605,7 +607,7 @@ public sealed partial class MainWindow : Window
             _httpClient,
             credentials.ProjectUrl,
             credentials.AnonKey,
-            credentials.Email,
+            credentials.VendorCode,
             credentials.Password);
 
         RosterViewModel.SetRosterClient(
@@ -641,7 +643,10 @@ public sealed partial class MainWindow : Window
     private async Task OpenSettingsDialogAsync()
     {
         (SupabaseCredentials? existingCredentials, _) = await TryReadCredentialsAsync();
-        SupabaseSettingsDialog dialog = new(existingCredentials, _credentialsValidator)
+        SupabaseSettingsDialog dialog = new(
+            existingCredentials,
+            _credentialsValidator,
+            _loginVendorClient)
         {
             XamlRoot = Content.XamlRoot,
         };

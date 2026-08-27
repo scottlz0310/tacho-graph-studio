@@ -25,7 +25,7 @@ public sealed class SupabasePasswordSessionTests
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("/auth/v1/token?grant_type=password", request.PathAndQuery);
         Assert.Equal("test-anon-key", request.ApiKey);
-        Assert.Contains("\"email\":\"shared@example.com\"", request.Body, StringComparison.Ordinal);
+        Assert.Contains("\"email\":\"test-vendor@zama-sys.internal\"", request.Body, StringComparison.Ordinal);
         Assert.Contains("\"password\":\"test-password\"", request.Body, StringComparison.Ordinal);
         Assert.Null(request.AuthorizationScheme);
     }
@@ -141,7 +141,7 @@ public sealed class SupabasePasswordSessionTests
             await Assert.ThrowsAsync<SupabaseAuthenticationException>(
                 () => session.GetAccessTokenAsync(CancellationToken.None));
 
-        Assert.Contains("メールアドレスとパスワード", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("業者コードとパスワード", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(responseBody, exception.Message, StringComparison.Ordinal);
     }
 
@@ -228,9 +228,9 @@ public sealed class SupabasePasswordSessionTests
     [Theory]
     [InlineData("", "test-password")]
     [InlineData("   ", "test-password")]
-    [InlineData("shared@example.com", "")]
-    [InlineData("shared@example.com", "   ")]
-    public void Constructor_BlankCredentialThrows(string email, string password)
+    [InlineData("test-vendor", "")]
+    [InlineData("test-vendor", "   ")]
+    public void Constructor_BlankCredentialThrows(string vendorCode, string password)
     {
         using HttpClient httpClient = new();
 
@@ -238,7 +238,7 @@ public sealed class SupabasePasswordSessionTests
             httpClient,
             new Uri("https://example.supabase.co"),
             "test-anon-key",
-            email,
+            vendorCode,
             password));
     }
 
@@ -253,7 +253,7 @@ public sealed class SupabasePasswordSessionTests
             httpClient,
             new Uri("https://example.supabase.co"),
             apiKey,
-            "shared@example.com",
+            "test-vendor",
             "test-password"));
     }
 
@@ -265,7 +265,7 @@ public sealed class SupabasePasswordSessionTests
             httpClient,
             new Uri(projectUrl),
             "test-anon-key",
-            "shared@example.com",
+            "test-vendor",
             "test-password",
             timeProvider);
 

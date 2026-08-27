@@ -9,19 +9,28 @@
     PrimaryButtonText="保存">
     <StackPanel MinWidth="360" Spacing="12">
         <TextBlock
-            Text="名簿データを取得する Supabase プロジェクトの URL・anon キーと、読み取りに使用するアカウントを入力してください。"
+            Text="名簿データを取得する Supabase プロジェクトの URL・anon キーを入力し、業者一覧を読み込んでください。"
             TextWrapping="Wrap" />
         <TextBox
             x:Name="ProjectUrlTextBox"
             Header="プロジェクト URL"
-            PlaceholderText="https://xxxxx.supabase.co" />
+            PlaceholderText="https://xxxxx.supabase.co"
+            TextChanged="OnProjectUrlTextChanged" />
         <PasswordBox
             x:Name="AnonKeyPasswordBox"
-            Header="anon キー" />
-        <TextBox
-            x:Name="EmailTextBox"
-            Header="メールアドレス"
-            PlaceholderText="shared@example.com" />
+            Header="anon キー"
+            PasswordChanged="OnAnonKeyPasswordChanged" />
+        <Button
+            x:Name="LoadVendorsButton"
+            Click="OnLoadVendorsButtonClick"
+            Content="業者一覧を読み込む"
+            HorizontalAlignment="Left" />
+        <ComboBox
+            x:Name="VendorComboBox"
+            Header="業者"
+            DisplayMemberPath="DisplayName"
+            PlaceholderText="業者を選択してください"
+            IsEnabled="False" />
         <PasswordBox
             x:Name="PasswordBox"
             Header="パスワード" />

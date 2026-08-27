@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Supabase の接続設定は URL・AnonKey の入力を維持したまま、ログイン用業者一覧（`login_vendors`）を取得して業者コードを選択する方式へ変更。Supabase Auth のメールアドレスは machinery-report-system と共通の規則で業者コードから導出し、公開 repo・CI成果物へ接続先の実値は埋め込まない
+
 ## [0.1.7] - 2026-08-15
 
 PNG 書き出し DPI の選択、更新後の変更点表示、認証済み経路での名簿・業者マスタ読み取り、PDF テスト後片付けを含むリリース。

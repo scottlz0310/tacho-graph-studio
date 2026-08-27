@@ -26,7 +26,7 @@ public sealed class SupabaseCredentialsValidator
             _httpClient,
             credentials.ProjectUrl,
             credentials.AnonKey,
-            credentials.Email,
+            credentials.VendorCode,
             credentials.Password);
         PostgRestRosterClient client = new(_httpClient, credentials.ProjectUrl, session);
 

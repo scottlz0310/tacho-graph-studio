@@ -9,7 +9,7 @@ public sealed class SecretStoreExtensionsTests
     private static readonly SupabaseCredentials Credentials = SupabaseCredentials.Create(
         new Uri("https://example.supabase.co"),
         "test-anon-key",
-        "shared@example.com",
+        "test-vendor",
         "test-password");
 
     [Fact]

@@ -12,7 +12,7 @@ public sealed class JsonRosterFilterSettingsStoreTests : IDisposable
 
     [Theory]
     [InlineData(RosterSeason.All, true, null)]
-    [InlineData(RosterSeason.Winter, false, "arata")]
+    [InlineData(RosterSeason.Winter, false, "test-vendor")]
     [InlineData(RosterSeason.Summer, true, "yamamoto")]
     [InlineData(RosterSeason.YearRound, false, null)]
     public async Task WriteAndReadAsync_RoundTripsSettings(

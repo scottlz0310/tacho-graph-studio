@@ -32,7 +32,7 @@ public sealed class SupabasePasswordSession : ISupabaseSession
         HttpClient httpClient,
         Uri projectUrl,
         string apiKey,
-        string email,
+        string vendorCode,
         string password,
         TimeProvider? timeProvider = null)
     {
@@ -49,9 +49,9 @@ public sealed class SupabasePasswordSession : ISupabaseSession
             throw new ArgumentException("Supabase anon key を指定してください。", nameof(apiKey));
         }
 
-        if (string.IsNullOrWhiteSpace(email))
+        if (string.IsNullOrWhiteSpace(vendorCode))
         {
-            throw new ArgumentException("Supabase のメールアドレスを指定してください。", nameof(email));
+            throw new ArgumentException("業者コードを指定してください。", nameof(vendorCode));
         }
 
         if (string.IsNullOrWhiteSpace(password))
@@ -60,7 +60,7 @@ public sealed class SupabasePasswordSession : ISupabaseSession
         }
 
         _httpClient = httpClient;
-        _email = email;
+        _email = SupabaseVendorIdentity.GetLoginEmail(vendorCode);
         _password = password;
         _timeProvider = timeProvider ?? TimeProvider.System;
         ApiKey = apiKey;
@@ -153,7 +153,7 @@ public sealed class SupabasePasswordSession : ISupabaseSession
         if (IsCredentialRejection(response.StatusCode))
         {
             throw new SupabaseAuthenticationException(
-                "Supabase の認証に失敗しました。接続設定のメールアドレスとパスワードを確認してください。"
+                "Supabase の認証に失敗しました。接続設定の業者コードとパスワードを確認してください。"
                 + $"(HTTP {(int)response.StatusCode})");
         }
 

@@ -12,29 +12,30 @@ public sealed class SupabaseCredentialsTests
         SupabaseCredentials credentials = SupabaseCredentials.Create(
             new Uri(projectUrl),
             "test-anon-key",
-            "shared@example.com",
+            "test-vendor",
             "test-password");
 
         Assert.Equal(new Uri(projectUrl), credentials.ProjectUrl);
         Assert.Equal("test-anon-key", credentials.AnonKey);
-        Assert.Equal("shared@example.com", credentials.Email);
+        Assert.Equal("test-vendor", credentials.VendorCode);
+        Assert.Equal("test-vendor@zama-sys.internal", credentials.Email);
         Assert.Equal("test-password", credentials.Password);
     }
 
     [Theory]
-    [InlineData("", "shared@example.com", "test-password")]
-    [InlineData("   ", "shared@example.com", "test-password")]
+    [InlineData("", "test-vendor", "test-password")]
+    [InlineData("   ", "test-vendor", "test-password")]
     [InlineData("test-anon-key", "", "test-password")]
     [InlineData("test-anon-key", "   ", "test-password")]
-    [InlineData("test-anon-key", "shared@example.com", "")]
-    [InlineData("test-anon-key", "shared@example.com", "   ")]
-    public void Create_BlankValueThrows(string anonKey, string email, string password)
+    [InlineData("test-anon-key", "test-vendor", "")]
+    [InlineData("test-anon-key", "test-vendor", "   ")]
+    public void Create_BlankValueThrows(string anonKey, string vendorCode, string password)
     {
         Assert.Throws<ArgumentException>(
             () => SupabaseCredentials.Create(
                 new Uri("https://example.supabase.co"),
                 anonKey,
-                email,
+                vendorCode,
                 password));
     }
 
@@ -47,7 +48,7 @@ public sealed class SupabaseCredentialsTests
             () => SupabaseCredentials.Create(
                 new Uri(projectUrl),
                 "test-anon-key",
-                "shared@example.com",
+                "test-vendor",
                 "test-password"));
     }
 
@@ -59,7 +60,7 @@ public sealed class SupabaseCredentialsTests
         Assert.Throws<ArgumentException>(() => SupabaseCredentials.Create(
             relativeUri,
             "test-anon-key",
-            "shared@example.com",
+            "test-vendor",
             "test-password"));
     }
 
@@ -69,7 +70,7 @@ public sealed class SupabaseCredentialsTests
         Assert.Throws<ArgumentNullException>(() => SupabaseCredentials.Create(
             null!,
             "test-anon-key",
-            "shared@example.com",
+            "test-vendor",
             "test-password"));
     }
 }
