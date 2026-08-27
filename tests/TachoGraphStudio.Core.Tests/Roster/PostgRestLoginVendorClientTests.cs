@@ -77,6 +77,37 @@ public sealed class PostgRestLoginVendorClientTests
                 CancellationToken.None));
     }
 
+    [Fact]
+    public async Task GetLoginVendorsAsync_TimeoutPropagatesCancellation()
+    {
+        RecordingHandler handler = new(_ => throw new TaskCanceledException("The request timed out."));
+        using HttpClient httpClient = new(handler);
+        PostgRestLoginVendorClient client = new(httpClient);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.GetLoginVendorsAsync(
+                new Uri("https://example.supabase.co"),
+                "test-anon-key",
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetLoginVendorsAsync_MalformedJsonResponseThrowsJsonException()
+    {
+        RecordingHandler handler = new(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>login</html>", Encoding.UTF8, "text/html"),
+        });
+        using HttpClient httpClient = new(handler);
+        PostgRestLoginVendorClient client = new(httpClient);
+
+        await Assert.ThrowsAsync<System.Text.Json.JsonException>(
+            () => client.GetLoginVendorsAsync(
+                new Uri("https://example.supabase.co"),
+                "test-anon-key",
+                CancellationToken.None));
+    }
+
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>
         new(statusCode)
         {

@@ -1,5 +1,3 @@
-using TachoGraphStudio.Core.Auth;
-
 namespace TachoGraphStudio.Core.Settings;
 
 public sealed class SupabaseCredentials
@@ -18,9 +16,6 @@ public sealed class SupabaseCredentials
     public string AnonKey { get; }
 
     public string VendorCode { get; }
-
-    // Supabase Auth では email/password を使うが、email は業者コードから導出する。
-    public string Email => SupabaseVendorIdentity.GetLoginEmail(VendorCode);
 
     public string Password { get; }
 

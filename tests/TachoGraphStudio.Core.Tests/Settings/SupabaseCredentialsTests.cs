@@ -18,7 +18,6 @@ public sealed class SupabaseCredentialsTests
         Assert.Equal(new Uri(projectUrl), credentials.ProjectUrl);
         Assert.Equal("test-anon-key", credentials.AnonKey);
         Assert.Equal("test-vendor", credentials.VendorCode);
-        Assert.Equal("test-vendor@zama-sys.internal", credentials.Email);
         Assert.Equal("test-password", credentials.Password);
     }
 

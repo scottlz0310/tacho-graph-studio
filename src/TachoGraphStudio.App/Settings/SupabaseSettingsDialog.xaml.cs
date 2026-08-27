@@ -228,7 +228,19 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
                 + statusSuffix);
             return false;
         }
+        catch (OperationCanceledException)
+        {
+            ClearLoadedVendors();
+            ShowError("Supabase への接続がタイムアウトしました。プロジェクト URL・anon キー・ネットワークを確認してください。");
+            return false;
+        }
         catch (JsonException)
+        {
+            ClearLoadedVendors();
+            ShowError("Supabase のログイン用業者一覧の形式が不正です。login_vendors ビューを確認してください。");
+            return false;
+        }
+        catch (NotSupportedException)
         {
             ClearLoadedVendors();
             ShowError("Supabase のログイン用業者一覧の形式が不正です。login_vendors ビューを確認してください。");
