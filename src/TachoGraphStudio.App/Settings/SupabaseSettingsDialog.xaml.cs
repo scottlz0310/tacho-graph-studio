@@ -205,7 +205,7 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
             if (_pendingVendorCode is not null)
             {
                 VendorComboBox.SelectedItem = vendors.FirstOrDefault(
-                    vendor => string.Equals(vendor.Code, _pendingVendorCode, StringComparison.Ordinal));
+                    vendor => string.Equals(vendor.Code, _pendingVendorCode, StringComparison.OrdinalIgnoreCase));
             }
 
             HideError();

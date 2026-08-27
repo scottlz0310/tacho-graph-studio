@@ -18,9 +18,11 @@ public static class SupabaseVendorIdentity
 
     public static bool TryGetVendorCode(string email, out string vendorCode)
     {
-        string normalized = email.Trim().ToLowerInvariant();
+        // 業者コードは login_vendors.code と突合させるため大小文字を保存し、
+        // ドメイン部のみ大小文字非依存で照合する。
+        string normalized = email.Trim();
         string suffix = $"@{LoginEmailDomain}";
-        if (!normalized.EndsWith(suffix, StringComparison.Ordinal))
+        if (!normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
         {
             vendorCode = string.Empty;
             return false;

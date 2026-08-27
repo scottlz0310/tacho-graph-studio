@@ -18,6 +18,12 @@ public sealed record LoginVendor
         init => _displayName = value ?? string.Empty;
     }
 
+    // display_name は管理外の login_vendors ビュー由来で null / 空文字が混入し得る。
+    // 空欄項目では業者を識別できないため、表示は Code へフォールバックする。
+    [JsonIgnore]
+    public string DisplayLabel =>
+        string.IsNullOrWhiteSpace(_displayName) ? Code : _displayName;
+
     [JsonPropertyName("sort_order")]
     public int SortOrder { get; init; }
 }
