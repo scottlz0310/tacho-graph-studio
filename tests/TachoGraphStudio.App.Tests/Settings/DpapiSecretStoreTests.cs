@@ -83,6 +83,20 @@ public sealed class DpapiSecretStoreTests : IDisposable
         Assert.Contains("業者コードを導出できません", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task ReadAsync_NullPayloadRequiresReentry(int version)
+    {
+        await WriteProtectedDocumentAsync(
+            version,
+            JsonSerializer.SerializeToUtf8Bytes<object?>(null, SerializerOptions));
+
+        using DpapiSecretStore store = new(SecretsPath);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.ReadAsync());
+    }
+
     [Fact]
     public async Task ReadAsync_UnsupportedVersionRequiresReentry()
     {
@@ -104,9 +118,13 @@ public sealed class DpapiSecretStoreTests : IDisposable
         }
     }
 
-    private async Task WriteProtectedDocumentAsync(int version, LegacySecretPayload payload)
+    private Task WriteProtectedDocumentAsync(int version, LegacySecretPayload payload) =>
+        WriteProtectedDocumentAsync(
+            version,
+            JsonSerializer.SerializeToUtf8Bytes(payload, SerializerOptions));
+
+    private async Task WriteProtectedDocumentAsync(int version, byte[] plainText)
     {
-        byte[] plainText = JsonSerializer.SerializeToUtf8Bytes(payload, SerializerOptions);
         byte[] cipherText;
         try
         {

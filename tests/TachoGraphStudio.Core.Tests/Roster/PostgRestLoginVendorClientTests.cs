@@ -8,6 +8,18 @@ namespace TachoGraphStudio.Core.Tests.Roster;
 
 public sealed class PostgRestLoginVendorClientTests
 {
+    [Fact]
+    public void LoginVendor_NullDisplayNameDefaultsToEmpty()
+    {
+        LoginVendor vendor = new()
+        {
+            Code = "test-vendor",
+            DisplayName = null!,
+        };
+
+        Assert.Equal(string.Empty, vendor.DisplayName);
+    }
+
     [Theory]
     [InlineData("https://example.supabase.co")]
     [InlineData("https://example.supabase.co/")]
@@ -130,6 +142,20 @@ public sealed class PostgRestLoginVendorClientTests
         PostgRestLoginVendorClient client = new(httpClient);
 
         await Assert.ThrowsAsync<System.Text.Json.JsonException>(
+            () => client.GetLoginVendorsAsync(
+                new Uri("https://example.supabase.co"),
+                "test-anon-key",
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetLoginVendorsAsync_NullJsonResponseThrowsInvalidDataException()
+    {
+        RecordingHandler handler = new(_ => JsonResponse(HttpStatusCode.OK, "null"));
+        using HttpClient httpClient = new(handler);
+        PostgRestLoginVendorClient client = new(httpClient);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
             () => client.GetLoginVendorsAsync(
                 new Uri("https://example.supabase.co"),
                 "test-anon-key",
