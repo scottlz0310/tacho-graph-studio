@@ -77,6 +77,34 @@ public sealed class PostgRestLoginVendorClientTests
                 CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("http://example.supabase.co")]
+    [InlineData("ftp://example.supabase.co")]
+    public async Task GetLoginVendorsAsync_NonHttpsUrlThrows(string projectUrl)
+    {
+        using HttpClient httpClient = new();
+        PostgRestLoginVendorClient client = new(httpClient);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => client.GetLoginVendorsAsync(
+                new Uri(projectUrl),
+                "test-anon-key",
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetLoginVendorsAsync_RelativeUrlThrows()
+    {
+        using HttpClient httpClient = new();
+        PostgRestLoginVendorClient client = new(httpClient);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => client.GetLoginVendorsAsync(
+                new Uri("/relative", UriKind.Relative),
+                "test-anon-key",
+                CancellationToken.None));
+    }
+
     [Fact]
     public async Task GetLoginVendorsAsync_TimeoutPropagatesCancellation()
     {

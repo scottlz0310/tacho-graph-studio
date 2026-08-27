@@ -13,6 +13,14 @@ public sealed class SupabaseVendorIdentityTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void GetLoginEmail_BlankVendorCodeThrows(string vendorCode)
+    {
+        Assert.Throws<ArgumentException>(() => SupabaseVendorIdentity.GetLoginEmail(vendorCode));
+    }
+
+    [Theory]
     [InlineData("test-vendor@zama-sys.internal", "test-vendor")]
     [InlineData("TEST-VENDOR@ZAMA-SYS.INTERNAL", "test-vendor")]
     public void TryGetVendorCode_ExtractsCodeFromSharedAccountEmail(
