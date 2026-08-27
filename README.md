@@ -42,6 +42,18 @@ dotnet test tests/TachoGraphStudio.Core.Tests                   # テスト
 dotnet format TachoGraphStudio.slnx --verify-no-changes         # フォーマット検証
 ```
 
+### ローカル状態の初期化
+
+開発中に設定・テンプレート・資格情報・キャッシュを初期状態へ戻す場合は `scripts/Reset-TachoGraphStudioState.ps1` を使う。対象は MSIX のアプリデータフォルダで、削除した範囲は次回起動時に作り直される。
+
+```powershell
+pwsh -File .\scripts\Reset-TachoGraphStudioState.ps1 -WhatIf                 # 削除対象の確認
+pwsh -File .\scripts\Reset-TachoGraphStudioState.ps1                         # すべて削除
+pwsh -File .\scripts\Reset-TachoGraphStudioState.ps1 -Scope Secrets, Cache   # 接続設定とキャッシュのみ
+```
+
+`-Scope` は `Settings`（画面設定・名簿フィルタ）/ `Templates`（チャート紙様式）/ `Secrets`（Supabase 接続設定）/ `Cache`（名簿・業者マスタ）/ `All`（既定）。アプリ起動中は終了時の自動保存で書き戻されるため実行を拒否する。
+
 ### リリース
 
 1. 初回のみ: `scripts/New-SigningCertificate.ps1` で署名証明書を生成し、出力される値を GitHub Secrets（`SIGNING_CERTIFICATE_BASE64` / `SIGNING_CERTIFICATE_PASSWORD`）に登録する
