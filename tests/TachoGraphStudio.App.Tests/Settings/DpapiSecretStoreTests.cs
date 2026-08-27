@@ -46,7 +46,7 @@ public sealed class DpapiSecretStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadAsync_LegacyVersionWithSharedEmailDerivesVendorCode()
+    public async Task ReadAsync_LegacyVersionWithSharedEmailPreservesVendorCodeCase()
     {
         await WriteProtectedDocumentAsync(
             version: 2,
@@ -60,7 +60,7 @@ public sealed class DpapiSecretStoreTests : IDisposable
         SupabaseCredentials? credentials = await store.ReadAsync();
         Assert.NotNull(credentials);
 
-        Assert.Equal("test-vendor", credentials!.VendorCode);
+        Assert.Equal("TEST-VENDOR", credentials!.VendorCode);
         Assert.Equal("test-password", credentials.Password);
     }
 

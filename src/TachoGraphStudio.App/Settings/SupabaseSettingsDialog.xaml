@@ -28,7 +28,7 @@
         <ComboBox
             x:Name="VendorComboBox"
             Header="業者"
-            DisplayMemberPath="DisplayName"
+            DisplayMemberPath="DisplayLabel"
             PlaceholderText="業者を選択してください"
             IsEnabled="False" />
         <PasswordBox
