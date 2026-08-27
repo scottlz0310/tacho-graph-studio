@@ -9,7 +9,7 @@
 ### Changed
 
 - Supabase の接続設定は URL・AnonKey の入力を維持したまま、ログイン用業者一覧（`login_vendors`）を取得して業者コードを選択する方式へ変更。Supabase Auth のメールアドレスは machinery-report-system と共通の規則で業者コードから導出し、公開 repo・CI成果物へ接続先の実値は埋め込まない
-- Codecov の patch 集計から WinUI の UI イベント境界を除外し、Core の認証・通信ロジックと DPAPI 移行処理をテスト対象として評価するように変更
+- Codecov のレポート全体（patch に加えて project カバレッジ・ファイルビュー）から接続設定ダイアログの UI イベント境界を除外するように変更。`MainWindow.xaml.cs` は接続・資格情報ロジックを含むため除外対象から外し、今後のカバレッジ劣化を可視化する（#120）
 
 ## [0.1.7] - 2026-08-15
 

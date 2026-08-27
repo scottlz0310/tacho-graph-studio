@@ -10,8 +10,10 @@ coverage:
       default:
         informational: true
 
+# Exclude only the WinUI UI event boundary. A top-level ignore applies to the whole
+# report (project coverage and the file view), not just patch, so MainWindow.xaml.cs -
+# which also holds connection and credential logic - is intentionally not ignored.
 ignore:
-  - "src/TachoGraphStudio.App/MainWindow.xaml.cs"
   - "src/TachoGraphStudio.App/Settings/SupabaseSettingsDialog.xaml.cs"
 
 comment:
