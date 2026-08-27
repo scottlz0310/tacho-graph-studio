@@ -10,5 +10,9 @@ coverage:
       default:
         informational: true
 
+ignore:
+  - "src/TachoGraphStudio.App/MainWindow.xaml.cs"
+  - "src/TachoGraphStudio.App/Settings/SupabaseSettingsDialog.xaml.cs"
+
 comment:
   layout: "condensed_header, diff, files"

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Persistence;
 using TachoGraphStudio.Core.Settings;
 
@@ -9,8 +10,10 @@ namespace TachoGraphStudio.App.Settings;
 
 public sealed class DpapiSecretStore : ISecretStore, IDisposable
 {
-    // version 2 で email / password を追加(#107)。version 1 は再入力を促すため受け付けない
-    private const int CurrentVersion = 2;
+    // version 3 で email を業者コードから導出する形式へ変更。version 2 は、現在の
+    // machinery-report-system と共通のメール規則へ変換できる場合だけ読み込む。
+    private const int CurrentVersion = 3;
+    private const int LegacyVersion = 2;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -41,7 +44,7 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
             return null;
         }
 
-        if (document.Version != CurrentVersion)
+        if (document.Version is not (CurrentVersion or LegacyVersion))
         {
             throw new InvalidDataException(
                 $"Supabase 資格情報のバージョン {document.Version} はサポートされていません。");
@@ -51,13 +54,18 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
         byte[] plainText = ProtectedData.Unprotect(cipherText, optionalEntropy: null, DataProtectionScope.CurrentUser);
         try
         {
+            if (document.Version == LegacyVersion)
+            {
+                return ReadLegacyCredentials(plainText);
+            }
+
             SecretPayload payload = JsonSerializer.Deserialize<SecretPayload>(plainText, SerializerOptions)
                 ?? throw new InvalidDataException("Supabase 資格情報の復号結果が JSON オブジェクトではありません。");
 
             return SupabaseCredentials.Create(
                 new Uri(payload.ProjectUrl),
                 payload.AnonKey,
-                payload.Email,
+                payload.VendorCode,
                 payload.Password);
         }
         finally
@@ -74,7 +82,7 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
         {
             ProjectUrl = credentials.ProjectUrl.AbsoluteUri,
             AnonKey = credentials.AnonKey,
-            Email = credentials.Email,
+            VendorCode = credentials.VendorCode,
             Password = credentials.Password,
         };
 
@@ -103,6 +111,26 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
         _file.Dispose();
     }
 
+    private static SupabaseCredentials ReadLegacyCredentials(byte[] plainText)
+    {
+        LegacySecretPayload payload = JsonSerializer.Deserialize<LegacySecretPayload>(
+                plainText,
+                SerializerOptions)
+            ?? throw new InvalidDataException("Supabase 資格情報の復号結果が JSON オブジェクトではありません。");
+
+        if (!SupabaseVendorIdentity.TryGetVendorCode(payload.Email, out string vendorCode))
+        {
+            throw new InvalidDataException(
+                "旧形式の Supabase 資格情報から業者コードを導出できません。接続設定を再入力してください。");
+        }
+
+        return SupabaseCredentials.Create(
+            new Uri(payload.ProjectUrl),
+            payload.AnonKey,
+            vendorCode,
+            payload.Password);
+    }
+
     private sealed class SecretDocument
     {
         public int Version { get; init; }
@@ -112,6 +140,21 @@ public sealed class DpapiSecretStore : ISecretStore, IDisposable
     }
 
     private sealed class SecretPayload
+    {
+        [JsonRequired]
+        public string ProjectUrl { get; init; } = string.Empty;
+
+        [JsonRequired]
+        public string AnonKey { get; init; } = string.Empty;
+
+        [JsonRequired]
+        public string VendorCode { get; init; } = string.Empty;
+
+        [JsonRequired]
+        public string Password { get; init; } = string.Empty;
+    }
+
+    private sealed class LegacySecretPayload
     {
         [JsonRequired]
         public string ProjectUrl { get; init; } = string.Empty;

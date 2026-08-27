@@ -19,8 +19,8 @@ public sealed class PostgRestVendorClientTests
         const string responseJson = """
             [
               {
-                "code": "arata",
-                "display_name": "アラタ工業",
+                "code": "test-vendor",
+                "display_name": "テスト業者",
                 "ranges": [
                   { "min_ctrl_num": 100, "max_ctrl_num": 499 },
                   { "min_ctrl_num": 500, "max_ctrl_num": 699 }
@@ -58,12 +58,12 @@ public sealed class PostgRestVendorClientTests
         Assert.Equal(RosterDataSource.Remote, result.Source);
         Assert.Equal(RetrievedAt, result.RetrievedAt);
         Assert.Equal(2, result.Vendors.Count);
-        VendorEntry arata = result.Vendors[0];
-        Assert.Equal("arata", arata.Code);
-        Assert.Equal("アラタ工業", arata.DisplayName);
+        VendorEntry testVendor = result.Vendors[0];
+        Assert.Equal("test-vendor", testVendor.Code);
+        Assert.Equal("テスト業者", testVendor.DisplayName);
         Assert.Equal(
             [new CtrlNumRange(100, 499), new CtrlNumRange(500, 699)],
-            arata.ViewRanges);
+            testVendor.ViewRanges);
         VendorEntry admin = result.Vendors[1];
         Assert.Equal("admin", admin.Code);
         Assert.Empty(admin.ViewRanges);
@@ -77,7 +77,7 @@ public sealed class PostgRestVendorClientTests
         int callCount = 0;
         RecordingHandler handler = new(_ => ++callCount == 1
             ? JsonResponse(statusCode, "unauthorized")
-            : JsonResponse(HttpStatusCode.OK, """[{ "code": "arata", "ranges": [] }]"""));
+            : JsonResponse(HttpStatusCode.OK, """[{ "code": "test-vendor", "ranges": [] }]"""));
         using HttpClient httpClient = new(handler);
         FakeSupabaseSession session = new();
         PostgRestVendorClient client = new(httpClient, new Uri("https://example.supabase.co"), session);
@@ -132,7 +132,7 @@ public sealed class PostgRestVendorClientTests
     public async Task GetVendorsAsync_NullDisplayNameIsNormalizedToEmptyString()
     {
         const string responseJson = """
-            [{ "code": "arata", "display_name": null, "ranges": [] }]
+            [{ "code": "test-vendor", "display_name": null, "ranges": [] }]
             """;
         RecordingHandler handler = new(_ => JsonResponse(HttpStatusCode.OK, responseJson));
         using HttpClient httpClient = new(handler);

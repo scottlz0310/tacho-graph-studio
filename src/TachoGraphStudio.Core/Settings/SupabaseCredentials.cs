@@ -2,11 +2,11 @@ namespace TachoGraphStudio.Core.Settings;
 
 public sealed class SupabaseCredentials
 {
-    private SupabaseCredentials(Uri projectUrl, string anonKey, string email, string password)
+    private SupabaseCredentials(Uri projectUrl, string anonKey, string vendorCode, string password)
     {
         ProjectUrl = projectUrl;
         AnonKey = anonKey;
-        Email = email;
+        VendorCode = vendorCode;
         Password = password;
     }
 
@@ -15,11 +15,11 @@ public sealed class SupabaseCredentials
     // apikey ヘッダー用。読み取り権限は JWT 側に依存する(#107)
     public string AnonKey { get; }
 
-    public string Email { get; }
+    public string VendorCode { get; }
 
     public string Password { get; }
 
-    public static SupabaseCredentials Create(Uri projectUrl, string anonKey, string email, string password)
+    public static SupabaseCredentials Create(Uri projectUrl, string anonKey, string vendorCode, string password)
     {
         ArgumentNullException.ThrowIfNull(projectUrl);
 
@@ -38,9 +38,9 @@ public sealed class SupabaseCredentials
             throw new ArgumentException("Supabase anon key を指定してください。", nameof(anonKey));
         }
 
-        if (string.IsNullOrWhiteSpace(email))
+        if (string.IsNullOrWhiteSpace(vendorCode))
         {
-            throw new ArgumentException("Supabase のメールアドレスを指定してください。", nameof(email));
+            throw new ArgumentException("業者コードを指定してください。", nameof(vendorCode));
         }
 
         if (string.IsNullOrWhiteSpace(password))
@@ -48,6 +48,6 @@ public sealed class SupabaseCredentials
             throw new ArgumentException("Supabase のパスワードを指定してください。", nameof(password));
         }
 
-        return new SupabaseCredentials(projectUrl, anonKey, email, password);
+        return new SupabaseCredentials(projectUrl, anonKey, vendorCode, password);
     }
 }

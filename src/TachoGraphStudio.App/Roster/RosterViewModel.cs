@@ -206,7 +206,7 @@ public sealed partial class RosterViewModel : ObservableObject
         }
         catch (HttpRequestException)
         {
-            ErrorMessage = "Supabase への接続に失敗しました。接続設定(URL・anon キー・アカウント)を確認してください。";
+            ErrorMessage = "Supabase への接続に失敗しました。接続設定(URL・anon キー・業者コード・パスワード)を確認してください。";
         }
         catch (JsonException)
         {

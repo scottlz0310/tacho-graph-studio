@@ -134,7 +134,7 @@ public sealed class CachedVendorClientTests
     private static VendorResult CreateResult(RosterDataSource source)
     {
         return new VendorResult(
-            [new VendorEntry { Code = "arata", DisplayName = "アラタ工業", ViewRanges = [new CtrlNumRange(100, 699)] }],
+            [new VendorEntry { Code = "test-vendor", DisplayName = "テスト業者", ViewRanges = [new CtrlNumRange(100, 699)] }],
             source,
             RetrievedAt);
     }

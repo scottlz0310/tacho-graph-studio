@@ -22,11 +22,11 @@ public sealed class RosterViewModelTests
     {
         {
             new HttpRequestException("Invalid key.", null, HttpStatusCode.Unauthorized),
-            "Supabase への接続に失敗しました。接続設定(URL・anon キー・アカウント)を確認してください。"
+            "Supabase への接続に失敗しました。接続設定(URL・anon キー・業者コード・パスワード)を確認してください。"
         },
         {
             new HttpRequestException("Forbidden.", null, HttpStatusCode.Forbidden),
-            "Supabase への接続に失敗しました。接続設定(URL・anon キー・アカウント)を確認してください。"
+            "Supabase への接続に失敗しました。接続設定(URL・anon キー・業者コード・パスワード)を確認してください。"
         },
         {
             new IOException("Cache write failed."),
@@ -105,7 +105,7 @@ public sealed class RosterViewModelTests
     public async Task RefreshAsync_AuthenticationFailureSurfacesItsMessage()
     {
         SupabaseAuthenticationException failure = new(
-            "Supabase の認証に失敗しました。接続設定のメールアドレスとパスワードを確認してください。(HTTP 400)");
+            "Supabase の認証に失敗しました。接続設定の業者コードとパスワードを確認してください。(HTTP 400)");
         RosterViewModel viewModel = new(new NullFilterSettingsStore());
         viewModel.SetRosterClient(new StubRosterClient(failure));
 
@@ -199,7 +199,7 @@ public sealed class RosterViewModelTests
         await viewModel.RefreshAsync();
 
         // 「全て」+ 閲覧範囲を持つ業者のみ。範囲行なし(admin)は除外される
-        Assert.Equal([null, "arata"], viewModel.VendorOptions.Select(option => option.Code));
+        Assert.Equal([null, "test-vendor"], viewModel.VendorOptions.Select(option => option.Code));
         Assert.Null(viewModel.VendorWarningMessage);
     }
 
@@ -214,11 +214,11 @@ public sealed class RosterViewModelTests
         await viewModel.RefreshAsync();
         Assert.Equal(2, viewModel.Entries.Count);
 
-        viewModel.SelectedVendorOption = viewModel.VendorOptions.Single(option => option.Code == "arata");
+        viewModel.SelectedVendorOption = viewModel.VendorOptions.Single(option => option.Code == "test-vendor");
 
         RosterEntry entry = Assert.Single(viewModel.Entries);
         Assert.Equal(100, entry.ControlNumber);
-        Assert.Equal("arata", settingsStore.LastWrittenSettings?.VendorCode);
+        Assert.Equal("test-vendor", settingsStore.LastWrittenSettings?.VendorCode);
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public sealed class RosterViewModelTests
     {
         RecordingFilterSettingsStore settingsStore = new()
         {
-            SavedSettings = new RosterFilterSettings { VendorCode = "arata" },
+            SavedSettings = new RosterFilterSettings { VendorCode = "test-vendor" },
         };
         RosterViewModel viewModel = new(settingsStore);
         await viewModel.LoadFilterSettingsAsync();
@@ -236,7 +236,7 @@ public sealed class RosterViewModelTests
 
         await viewModel.RefreshAsync();
 
-        Assert.Equal("arata", viewModel.SelectedVendorOption?.Code);
+        Assert.Equal("test-vendor", viewModel.SelectedVendorOption?.Code);
         RosterEntry entry = Assert.Single(viewModel.Entries);
         Assert.Equal(100, entry.ControlNumber);
     }
@@ -302,8 +302,8 @@ public sealed class RosterViewModelTests
             [
                 new VendorEntry
                 {
-                    Code = "arata",
-                    DisplayName = "アラタ工業",
+                    Code = "test-vendor",
+                    DisplayName = "テスト業者",
                     ViewRanges = [new CtrlNumRange(100, 499)],
                 },
                 new VendorEntry { Code = "admin", DisplayName = "管理者" },
