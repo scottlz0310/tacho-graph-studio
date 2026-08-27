@@ -4,6 +4,12 @@
 
 フォーマットは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に基づき、バージョニングは [Semantic Versioning](https://semver.org/spec/v2.0.0.html) に従う。
 
+## [Unreleased]
+
+### Added
+
+- 開発者向けのローカル状態初期化スクリプト `scripts/Reset-TachoGraphStudioState.ps1` を追加。MSIX のアプリデータフォルダから設定・テンプレート・資格情報・キャッシュを `-Scope` 単位で削除する。アプリ起動中は終了時の自動保存で書き戻されるため実行を拒否し、`-WhatIf` で削除対象を確認できる
+
 ## [0.2.0] - 2026-08-27
 
 Supabase のログインをメールアドレス入力から業者コード選択へ切り替えたリリース。接続設定ダイアログで `login_vendors` から業者一覧を取得して選択する方式になり、保存済みの資格情報は自動で移行される。あわせて業者選択まわりの不具合 2 件を修正している。
