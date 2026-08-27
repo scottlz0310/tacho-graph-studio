@@ -143,4 +143,37 @@ Describe "Reset-TachoGraphStudioState.ps1" {
             }
         }
     }
+
+    Context "起動中プロセスの検出（既定経路）" {
+        It "-GetProcessOverride 省略時、実行ファイル名 TachoGraphStudio.App でプロセスを照会すること" {
+            $root = New-FakePackageRoot
+            try {
+                Mock Get-Process { return [PSCustomObject]@{ Id = 4321 } } -ParameterFilter { $Name -eq "TachoGraphStudio.App" }
+                Mock Get-Process { return $null }
+
+                $res = & $scriptPath -PackageRoot $root -Test -Confirm:$false
+                $res | Should -Be 1
+                Test-Path -LiteralPath (Join-Path $root "LocalState\settings") | Should -BeTrue
+                Should -Invoke Get-Process -Times 1 -Exactly -ParameterFilter { $Name -eq "TachoGraphStudio.App" }
+            }
+            finally {
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "既定のプロセス名がアプリの実行アセンブリ名と一致すること" {
+            $csproj = (Resolve-Path "$PSScriptRoot/../src/TachoGraphStudio.App/TachoGraphStudio.App.csproj").Path
+            $assemblyName = ([xml](Get-Content -LiteralPath $csproj)).Project.PropertyGroup.AssemblyName |
+                Where-Object { $_ } |
+                Select-Object -First 1
+            if (-not $assemblyName) {
+                $assemblyName = [System.IO.Path]::GetFileNameWithoutExtension($csproj)
+            }
+
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$null, [ref]$null)
+            $parameter = $ast.ParamBlock.Parameters |
+                Where-Object { $_.Name.VariablePath.UserPath -eq "ProcessName" }
+            $parameter.DefaultValue.Value | Should -Be $assemblyName
+        }
+    }
 }

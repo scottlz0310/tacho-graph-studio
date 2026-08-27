@@ -26,6 +26,10 @@ param(
     [ValidateSet("All", "Settings", "Templates", "Secrets", "Cache")]
     [string[]]$Scope = @("All"),
     [string]$PackageName = "TachoGraphStudio",
+    # 起動中判定に使うプロセス名。パッケージ名ではなく実行ファイル名(AppxManifest の
+    # Executable = TachoGraphStudio.App.exe)に対応する。Get-Process -Name は完全一致のため
+    # パッケージ名で照会すると起動中でも検出できない
+    [string]$ProcessName = "TachoGraphStudio.App",
     # 省略時は $PackagesRoot 配下の <PackageName>_<publisher hash> フォルダから解決する
     [string]$PackageRoot,
     [string]$PackagesRoot = (Join-Path $env:LOCALAPPDATA "Packages"),
@@ -90,11 +94,11 @@ if (-not (Test-Path -LiteralPath $PackageRoot)) {
 if ($GetProcessOverride) {
     $running = & $GetProcessOverride
 } else {
-    $running = Get-Process -Name $PackageName -ErrorAction SilentlyContinue
+    $running = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
 }
 
 if ($running) {
-    Write-Host "$PackageName が起動中です。アプリを終了してから再実行してください（起動中に削除すると終了時の自動保存で書き戻されます）。"
+    Write-Host "$ProcessName が起動中です。アプリを終了してから再実行してください（起動中に削除すると終了時の自動保存で書き戻されます）。"
     Invoke-Exit 1
     return
 }
