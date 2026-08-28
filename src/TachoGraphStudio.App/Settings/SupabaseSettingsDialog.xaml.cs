@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using Microsoft.UI.Xaml;
@@ -7,25 +8,45 @@ using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Settings;
 
+using WinRT.Interop;
+
+using WinUIEx;
+
 namespace TachoGraphStudio.App.Settings;
 
-public sealed partial class SupabaseSettingsDialog : ContentDialog
+public sealed partial class SupabaseSettingsDialog : WindowEx
 {
+    private readonly TaskCompletionSource<bool> _closed = new(
+        TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly SupabaseCredentialsValidator _credentialsValidator;
+    private readonly SupabaseCredentials? _existingCredentials;
     private readonly ILoginVendorClient _loginVendorClient;
     private string? _loadedAnonKey;
     private string? _loadedProjectUrl;
     private readonly string? _pendingVendorCode;
+    private bool _accepted;
+    private bool _isShown;
 
     public SupabaseSettingsDialog(
         SupabaseCredentials? existingCredentials,
+        ImageProcessingSettings imageProcessingSettings,
         SupabaseCredentialsValidator credentialsValidator,
-        ILoginVendorClient loginVendorClient)
+        ILoginVendorClient loginVendorClient,
+        bool selectSupabaseSection = false)
     {
+        ArgumentNullException.ThrowIfNull(imageProcessingSettings);
+
         InitializeComponent();
+        _existingCredentials = existingCredentials;
         _credentialsValidator = credentialsValidator;
         _loginVendorClient = loginVendorClient;
-        Loaded += OnLoaded;
+        Closed += OnClosed;
+
+        imageProcessingSettings.Validate();
+        ThresholdNumberBox.Value = imageProcessingSettings.Threshold;
+        PaddingNumberBox.Value = imageProcessingSettings.PaddingPx;
+        EllipsePaddingNumberBox.Value = imageProcessingSettings.EllipsePaddingPx;
+        SettingsTabView.SelectedIndex = selectSupabaseSection ? 1 : 0;
 
         if (existingCredentials is not null)
         {
@@ -38,9 +59,29 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
 
     public SupabaseCredentials? Result { get; private set; }
 
+    public ImageProcessingSettings? ImageProcessingResult { get; private set; }
+
+    /// <summary>設定ウィンドウを <paramref name="ownerHandle"/> の所有ウィンドウとして表示する。</summary>
+    public Task<bool> ShowAsync(nint ownerHandle)
+    {
+        if (_isShown)
+        {
+            throw new InvalidOperationException("設定ウィンドウは既に表示されています。");
+        }
+
+        _isShown = true;
+        // owner を設定して親より前面に固定する。親の入力抑止は呼び出し側の EnableWindow が担う
+        SetWindowLongPtrW(WindowNative.GetWindowHandle(this), GwlpHwndParent, ownerHandle);
+        Activate();
+        this.CenterOnScreen();
+        return _closed.Task;
+    }
+
+    private void OnClosed(object sender, WindowEventArgs args) => _closed.TrySetResult(_accepted);
+
     private async void OnLoaded(object sender, RoutedEventArgs args)
     {
-        Loaded -= OnLoaded;
+        RootGrid.Loaded -= OnLoaded;
 
         if (HasConnectionInputs())
         {
@@ -63,84 +104,149 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
         ClearLoadedVendors();
     }
 
-    private async void OnPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    private async void OnSaveButtonClick(object sender, RoutedEventArgs args)
     {
-        ContentDialogButtonClickDeferral deferral = args.GetDeferral();
+        if (!TryReadImageProcessingSettings(out ImageProcessingSettings imageProcessingSettings))
+        {
+            SettingsTabView.SelectedIndex = 0;
+            return;
+        }
+
+        if (!HasAnyConnectionInput() || ConnectionInputsMatchExisting())
+        {
+            Accept(imageProcessingSettings, credentials: null);
+            return;
+        }
+
+        if (!Uri.TryCreate(ProjectUrlTextBox.Text, UriKind.Absolute, out Uri? projectUrl)
+            || projectUrl.Scheme != Uri.UriSchemeHttps)
+        {
+            SettingsTabView.SelectedIndex = 1;
+            ShowError("プロジェクト URL は https://xxxxx.supabase.co の形式で入力してください。");
+            return;
+        }
+
+        if (!IsLoadedFor(projectUrl, AnonKeyPasswordBox.Password))
+        {
+            SettingsTabView.SelectedIndex = 1;
+            ShowError("先に「業者一覧を読み込む」を実行してください。");
+            return;
+        }
+
+        if (VendorComboBox.SelectedItem is not LoginVendor selectedVendor)
+        {
+            SettingsTabView.SelectedIndex = 1;
+            ShowError("業者を選択してください。");
+            return;
+        }
+
+        SupabaseCredentials candidate;
         try
         {
-            if (!Uri.TryCreate(ProjectUrlTextBox.Text, UriKind.Absolute, out Uri? projectUrl))
-            {
-                ShowError("プロジェクト URL は https://xxxxx.supabase.co の形式で入力してください。");
-                args.Cancel = true;
-                return;
-            }
-
-            if (projectUrl.Scheme != Uri.UriSchemeHttps)
-            {
-                ShowError("プロジェクト URL は https://xxxxx.supabase.co の形式で入力してください。");
-                args.Cancel = true;
-                return;
-            }
-
-            if (!IsLoadedFor(projectUrl, AnonKeyPasswordBox.Password))
-            {
-                ShowError("先に「業者一覧を読み込む」を実行してください。");
-                args.Cancel = true;
-                return;
-            }
-
-            if (VendorComboBox.SelectedItem is not LoginVendor selectedVendor)
-            {
-                ShowError("業者を選択してください。");
-                args.Cancel = true;
-                return;
-            }
-
-            SupabaseCredentials candidate;
-            try
-            {
-                candidate = SupabaseCredentials.Create(
-                    projectUrl,
-                    AnonKeyPasswordBox.Password,
-                    selectedVendor.Code,
-                    PasswordBox.Password);
-            }
-            catch (ArgumentException exception)
-            {
-                ShowError(exception.Message);
-                args.Cancel = true;
-                return;
-            }
-
-            SupabaseConnectionResult connectionResult = await VerifyConnectivityAsync(candidate);
-            if (!connectionResult.IsValid)
-            {
-                ShowError(connectionResult.ErrorMessage ?? "Supabase に接続できませんでした。");
-                args.Cancel = true;
-                return;
-            }
-
-            Result = candidate;
+            candidate = SupabaseCredentials.Create(
+                projectUrl,
+                AnonKeyPasswordBox.Password,
+                selectedVendor.Code,
+                PasswordBox.Password);
         }
-        finally
+        catch (ArgumentException exception)
         {
-            deferral.Complete();
+            ShowError(exception.Message);
+            return;
         }
+
+        SupabaseConnectionResult connectionResult = await VerifyConnectivityAsync(candidate);
+        if (!connectionResult.IsValid)
+        {
+            ShowError(connectionResult.ErrorMessage ?? "Supabase に接続できませんでした。");
+            return;
+        }
+
+        Accept(imageProcessingSettings, candidate);
+    }
+
+    private void OnCancelButtonClick(object sender, RoutedEventArgs args) => Close();
+
+    private void Accept(
+        ImageProcessingSettings imageProcessingSettings,
+        SupabaseCredentials? credentials)
+    {
+        ImageProcessingResult = imageProcessingSettings;
+        Result = credentials;
+        _accepted = true;
+        Close();
+    }
+
+    private void OnRestoreImageProcessingDefaultsButtonClick(object sender, RoutedEventArgs args)
+    {
+        ImageProcessingSettings defaults = ImageProcessingSettings.Default;
+        ThresholdNumberBox.Value = defaults.Threshold;
+        PaddingNumberBox.Value = defaults.PaddingPx;
+        EllipsePaddingNumberBox.Value = defaults.EllipsePaddingPx;
+        HideError();
+    }
+
+    private bool TryReadImageProcessingSettings(out ImageProcessingSettings settings)
+    {
+        settings = ImageProcessingSettings.Default;
+        if (!TryReadInteger(ThresholdNumberBox, "前景判定しきい値", out int threshold)
+            || !TryReadInteger(PaddingNumberBox, "切り出し余白", out int paddingPx)
+            || !TryReadInteger(EllipsePaddingNumberBox, "アルファ円マージン", out int ellipsePaddingPx))
+        {
+            return false;
+        }
+
+        ImageProcessingSettings candidate = new()
+        {
+            Threshold = threshold,
+            PaddingPx = paddingPx,
+            EllipsePaddingPx = ellipsePaddingPx,
+        };
+
+        try
+        {
+            candidate.Validate();
+        }
+        catch (ArgumentException exception)
+        {
+            ShowError(exception.Message);
+            return false;
+        }
+
+        settings = candidate;
+        return true;
+    }
+
+    private bool TryReadInteger(NumberBox numberBox, string label, out int value)
+    {
+        double input = numberBox.Value;
+        if (!double.IsFinite(input)
+            || input != Math.Truncate(input)
+            || input < int.MinValue
+            || input > int.MaxValue)
+        {
+            ShowError($"{label}は整数で指定してください。");
+            value = default;
+            return false;
+        }
+
+        value = (int)input;
+        return true;
     }
 
     private async Task<SupabaseConnectionResult> VerifyConnectivityAsync(SupabaseCredentials candidate)
     {
-        string originalPrimaryButtonText = PrimaryButtonText;
-        IsPrimaryButtonEnabled = false;
-        PrimaryButtonText = "接続を確認しています...";
+        object originalContent = SaveButton.Content;
+        SaveButton.IsEnabled = false;
+        SaveButton.Content = "接続を確認しています...";
         try
         {
             return await _credentialsValidator.ValidateAsync(candidate);
         }
         finally
         {
-            PrimaryButtonText = originalPrimaryButtonText;
-            IsPrimaryButtonEnabled = true;
+            SaveButton.Content = originalContent;
+            SaveButton.IsEnabled = true;
         }
     }
 
@@ -153,6 +259,38 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
     private bool HasConnectionInputs() =>
         !string.IsNullOrWhiteSpace(ProjectUrlTextBox.Text)
         && !string.IsNullOrWhiteSpace(AnonKeyPasswordBox.Password);
+
+    private bool HasAnyConnectionInput() =>
+        !string.IsNullOrWhiteSpace(ProjectUrlTextBox.Text)
+        || !string.IsNullOrWhiteSpace(AnonKeyPasswordBox.Password)
+        || !string.IsNullOrWhiteSpace(PasswordBox.Password)
+        || VendorComboBox.SelectedItem is not null;
+
+    private bool ConnectionInputsMatchExisting()
+    {
+        if (_existingCredentials is null
+            || !string.Equals(
+                ProjectUrlTextBox.Text,
+                _existingCredentials.ProjectUrl.AbsoluteUri,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                AnonKeyPasswordBox.Password,
+                _existingCredentials.AnonKey,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                PasswordBox.Password,
+                _existingCredentials.Password,
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return VendorComboBox.SelectedItem is not LoginVendor selectedVendor
+            || string.Equals(
+                selectedVendor.Code,
+                _existingCredentials.VendorCode,
+                StringComparison.OrdinalIgnoreCase);
+    }
 
     private bool IsLoadedFor(Uri projectUrl, string anonKey) =>
         string.Equals(_loadedProjectUrl, projectUrl.AbsoluteUri, StringComparison.Ordinal)
@@ -264,4 +402,11 @@ public sealed partial class SupabaseSettingsDialog : ContentDialog
         ErrorTextBlock.Text = string.Empty;
         ErrorTextBlock.Visibility = Visibility.Collapsed;
     }
+
+    private const int GwlpHwndParent = -8;
+
+    // LibraryImport は AllowUnsafeBlocks をプロジェクト全体で要求する（SYSLIB1062）。
+    // blittable なハンドル・整数だけを扱うため、この 1 箇所のために unsafe は解禁しない
+    [DllImport("user32.dll")]
+    private static extern nint SetWindowLongPtrW(nint windowHandle, int index, nint value);
 }

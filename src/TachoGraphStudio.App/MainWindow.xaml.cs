@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -79,7 +80,7 @@ public sealed partial class MainWindow : Window
         FileTemplateStore templateStore = new(Path.Combine(localFolderPath, "templates"));
 
         StageViewModel = new StageViewModel(
-            new StagePipeline(new SheetLoader(new WindowsPdfRasterizer())),
+            new StagePipeline(new SheetLoader(new WindowsPdfRasterizer(Program.GetSystemRasterizationScale))),
             new WriteableBitmapImageSourceFactory(),
             templateStore);
 
@@ -257,6 +258,18 @@ public sealed partial class MainWindow : Window
             StageViewModel.ExportDpi = exportDpi;
         }
 
+        if (state.ImageProcessing is { } imageProcessing)
+        {
+            try
+            {
+                StageViewModel.ProcessingSettings = imageProcessing;
+            }
+            catch (ArgumentException)
+            {
+                // 手動編集などで範囲外になった項目は適用せず、既定値で安全に起動する
+            }
+        }
+
         if (state.SidebarWidth is { } sidebarWidth && double.IsFinite(sidebarWidth))
         {
             SidebarColumn.Width = new GridLength(
@@ -410,6 +423,7 @@ public sealed partial class MainWindow : Window
             if (e.PropertyName is nameof(StageViewModel.OutputDirectory)
                 or nameof(StageViewModel.TargetDate)
                 or nameof(StageViewModel.ExportDpi)
+                or nameof(StageViewModel.ProcessingSettings)
                 or nameof(StageViewModel.SelectedTemplate))
             {
                 RequestSaveAppState();
@@ -471,6 +485,7 @@ public sealed partial class MainWindow : Window
             LastTargetDate = StageViewModel.TargetDate,
             SelectedTemplateId = StageViewModel.SelectedTemplate?.Id,
             ExportDpi = StageViewModel.ExportDpi,
+            ImageProcessing = StageViewModel.ProcessingSettings,
             LastShownVersion = _lastShownVersion,
             SidebarWidth = SidebarColumn.ActualWidth,
             Window = _windowPlacementTracker.Capture(isMaximized),
@@ -496,6 +511,11 @@ public sealed partial class MainWindow : Window
     private async void OnOpenSettingsButtonClick(object sender, RoutedEventArgs e)
     {
         await OpenSettingsDialogAsync();
+    }
+
+    private async void OnReprocessSheetsButtonClick(object sender, RoutedEventArgs e)
+    {
+        await StageViewModel.ReprocessAsync();
     }
 
     private async Task OpenTemplateEditorAsync()
@@ -597,7 +617,7 @@ public sealed partial class MainWindow : Window
 
             if (promptIfUnset)
             {
-                await OpenSettingsDialogAsync();
+                await OpenSettingsDialogAsync(selectSupabaseSection: true);
             }
 
             return;
@@ -640,19 +660,40 @@ public sealed partial class MainWindow : Window
         return new CachedVendorClient(remoteClient, cache);
     }
 
-    private async Task OpenSettingsDialogAsync()
+    private async Task OpenSettingsDialogAsync(bool selectSupabaseSection = false)
     {
         (SupabaseCredentials? existingCredentials, _) = await TryReadCredentialsAsync();
         SupabaseSettingsDialog dialog = new(
             existingCredentials,
+            StageViewModel.ProcessingSettings,
             _credentialsValidator,
-            _loginVendorClient)
-        {
-            XamlRoot = Content.XamlRoot,
-        };
+            _loginVendorClient,
+            selectSupabaseSection);
 
-        ContentDialogResult result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary || dialog.Result is null)
+        // 設定ダイアログは独立した Window のため、hit test の抑止だけではタイトルバー(閉じる)が
+        // 生き残り、表示中に親を閉じられる。EnableWindow で親をモーダル相当に無効化し、
+        // 設定反映前の状態 flush と破棄済み Window への Activate() を防ぐ
+        nint ownerHandle = WindowNative.GetWindowHandle(this);
+        bool accepted;
+        EnableWindow(ownerHandle, false);
+        try
+        {
+            accepted = await dialog.ShowAsync(ownerHandle);
+        }
+        finally
+        {
+            EnableWindow(ownerHandle, true);
+            Activate();
+        }
+
+        if (!accepted || dialog.ImageProcessingResult is null)
+        {
+            return;
+        }
+
+        StageViewModel.ProcessingSettings = dialog.ImageProcessingResult;
+
+        if (dialog.Result is null)
         {
             return;
         }
@@ -691,4 +732,10 @@ public sealed partial class MainWindow : Window
             return (null, true);
         }
     }
+
+    // LibraryImport は AllowUnsafeBlocks をプロジェクト全体で要求する（SYSLIB1062）。
+    // blittable なハンドル・BOOL だけを扱うため、この 1 箇所のために unsafe は解禁しない
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnableWindow(nint windowHandle, [MarshalAs(UnmanagedType.Bool)] bool enable);
 }

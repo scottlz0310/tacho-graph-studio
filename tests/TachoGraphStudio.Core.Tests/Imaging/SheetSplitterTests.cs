@@ -52,6 +52,28 @@ public sealed class SheetSplitterTests
         }
     }
 
+    [Fact]
+    public void Split_MaximumPaddingWithoutDpiClampsCropToSheet()
+    {
+        SheetImage sheet = BuildSheet(1400, 1400, [(700, 700, 550)]);
+
+        List<DiscImage> discs =
+        [
+            .. new SheetSplitter().Split(
+                sheet,
+                new DiscSplitOptions { PaddingPx = int.MaxValue }),
+        ];
+        try
+        {
+            DiscImage disc = Assert.Single(discs);
+            Assert.Equal(new Rect(0, 0, 1400, 1400), disc.RegionInSheet);
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
     // 白地に線画で印字されたチャート紙(未記入の Task-Meter 等)の回帰。
     // 塗り潰しの円盤は充填率 0.77 前後だが、線画は 0.02〜0.15 まで下がる。
     // 旧実装は MinFillRatio=0.4 でこれを誤検出として捨てていた(#91)
@@ -531,6 +553,72 @@ public sealed class SheetSplitterTests
         }
     }
 
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(30, true)]
+    [InlineData(31, false)]
+    [InlineData(255, false)]
+    public void Split_ThresholdAlsoControlsHoughDetection(int threshold, bool detected)
+    {
+        using Mat raw = new(600, 600, MatType.CV_8UC3, Scalar.All(255));
+        Cv2.Circle(raw, new Point(300, 300), StandardRadius, Scalar.All(225), thickness: -1);
+        // 円盤がしきい値で除外されてもマスク自体は空にならない入力を作る。旧実装は
+        // この点を前景として通した後、元画像に対する Hough で除外済みの円盤を復活させた
+        Cv2.Circle(raw, new Point(20, 20), 2, Scalar.All(0), thickness: -1);
+        SheetImage sheet = Encode(raw);
+        SheetSplitter splitter = new();
+        DiscSplitOptions options = new() { Dpi = TestDpi, Threshold = threshold };
+
+        if (detected)
+        {
+            List<DiscImage> discs = [.. splitter.Split(sheet, options)];
+            try
+            {
+                Assert.Single(discs);
+            }
+            finally
+            {
+                discs.ForEach(disc => disc.Dispose());
+            }
+        }
+        else
+        {
+            Assert.Throws<DiscSplitException>(() => splitter.Split(sheet, options));
+        }
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(15, true)]
+    [InlineData(16, false)]
+    [InlineData(255, false)]
+    public void Split_ThresholdControlsFaintHoughFallback(int threshold, bool detected)
+    {
+        using Mat raw = new(600, 600, MatType.CV_8UC3, Scalar.All(255));
+        DrawBrokenRing(raw, new Point(300, 300), StandardRadius, Scalar.All(240));
+        Cv2.Circle(raw, new Point(20, 20), 2, Scalar.All(0), thickness: -1);
+        SheetImage sheet = Encode(raw);
+        SheetSplitter splitter = new();
+        DiscSplitOptions options = new() { Dpi = TestDpi, Threshold = threshold };
+
+        if (detected)
+        {
+            List<DiscImage> discs = [.. splitter.Split(sheet, options)];
+            try
+            {
+                Assert.Single(discs);
+            }
+            finally
+            {
+                discs.ForEach(disc => disc.Dispose());
+            }
+        }
+        else
+        {
+            Assert.Throws<DiscSplitException>(() => splitter.Split(sheet, options));
+        }
+    }
+
     [Fact]
     public void Split_BlankSheetThrowsWithContext()
     {
@@ -583,7 +671,7 @@ public sealed class SheetSplitterTests
     }
 
     // 20 度の円弧を 30 度おきに描き、どの連結成分も最小サイズに届かないようにする
-    private static void DrawBrokenRing(Mat sheet, Point center, int radius)
+    private static void DrawBrokenRing(Mat sheet, Point center, int radius, Scalar? color = null)
     {
         for (int angle = 0; angle < 360; angle += 30)
         {
@@ -594,7 +682,7 @@ public sealed class SheetSplitterTests
                 angle: 0,
                 startAngle: angle,
                 endAngle: angle + 20,
-                DiscGray,
+                color ?? DiscGray,
                 thickness: 3);
         }
     }

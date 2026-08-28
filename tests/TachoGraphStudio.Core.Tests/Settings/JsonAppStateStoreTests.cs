@@ -20,6 +20,12 @@ public sealed class JsonAppStateStoreTests : IDisposable
             LastTargetDate = new DateOnly(2026, 7, 19),
             SelectedTemplateId = "Yazaki45",
             ExportDpi = 300,
+            ImageProcessing = new ImageProcessingSettings
+            {
+                Threshold = 12,
+                PaddingPx = 32,
+                EllipsePaddingPx = -4,
+            },
             LastShownVersion = "0.1.6",
             SidebarWidth = 420.5,
             Window = new WindowPlacement(100, 50, 1440, 900, IsMaximized: false),
@@ -45,6 +51,7 @@ public sealed class JsonAppStateStoreTests : IDisposable
         Assert.Null(restored.LastTargetDate);
         Assert.Null(restored.SelectedTemplateId);
         Assert.Null(restored.ExportDpi);
+        Assert.Null(restored.ImageProcessing);
         Assert.Null(restored.LastShownVersion);
         Assert.Null(restored.SidebarWidth);
         Assert.Null(restored.Window);

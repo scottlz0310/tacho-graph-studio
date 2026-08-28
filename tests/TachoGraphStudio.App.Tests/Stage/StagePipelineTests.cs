@@ -1,7 +1,11 @@
+using Microsoft.UI.Xaml.Media;
+
 using OpenCvSharp;
 
 using TachoGraphStudio.App.Stage;
+using TachoGraphStudio.App.Tests.Templates;
 using TachoGraphStudio.Core.Imaging;
+using TachoGraphStudio.Core.Settings;
 
 namespace TachoGraphStudio.App.Tests.Stage;
 
@@ -90,6 +94,103 @@ public sealed class StagePipelineTests : IDisposable
         Assert.Equal([0, 1, 0, 1], discs.Select(disc => disc.IndexInSheet));
     }
 
+    [Fact]
+    public async Task ProcessAsync_RuntimeSettingsOverrideDetectionThreshold()
+    {
+        using Mat sheet = BuildSheet(discCount: 1);
+        Cv2.Circle(sheet, new Point(20, 20), 2, Scalar.All(0), thickness: -1);
+        Cv2.ImEncode(".png", sheet, out byte[] pageBytes);
+        string path = Path.Combine(_temporaryDirectory, "threshold.pdf");
+        File.WriteAllBytes(path, [0x25, 0x50, 0x44, 0x46]);
+        StagePipeline pipeline = new(
+            new SheetLoader(new FakePdfRasterizer(pageBytes, pageCount: 1)),
+            pdfSplitOptions: TestSplitOptions);
+        ImageProcessingSettings settings = new() { Threshold = 255 };
+
+        await Assert.ThrowsAsync<DiscSplitException>(
+            async () => await ToListAsync(pipeline.ProcessAsync([path], settings)));
+    }
+
+    [Fact]
+    public async Task ReprocessAsync_ChangedThresholdReprocessesSameInputWithActualPipeline()
+    {
+        using Mat sheet = BuildBrokenRingSheet();
+        Cv2.Circle(sheet, new Point(20, 20), 2, Scalar.All(0), thickness: -1);
+        Cv2.ImEncode(".png", sheet, out byte[] pageBytes);
+        string path = Path.Combine(_temporaryDirectory, "reprocess-threshold.pdf");
+        File.WriteAllBytes(path, [0x25, 0x50, 0x44, 0x46]);
+        StagePipeline pipeline = new(
+            new SheetLoader(new FakePdfRasterizer(pageBytes, pageCount: 1)),
+            pdfSplitOptions: TestSplitOptions);
+        StageViewModel viewModel = new(
+            pipeline,
+            new NullImageSourceFactory(),
+            new FakeTemplateStore(),
+            new DateOnly(2026, 8, 28))
+        {
+            ProcessingSettings = new ImageProcessingSettings { Threshold = 255 },
+        };
+
+        await viewModel.ImportAsync([path]);
+
+        Assert.Empty(viewModel.Discs);
+        Assert.True(viewModel.HasImportError);
+        Assert.True(viewModel.CanReprocess);
+
+        viewModel.ProcessingSettings = new ImageProcessingSettings { Threshold = 1 };
+        await viewModel.ReprocessAsync();
+
+        Assert.Single(viewModel.Discs);
+        Assert.False(viewModel.HasImportError);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_PassesEllipsePaddingToBackgroundRemover()
+    {
+        string path = WriteJpegSheet("ellipse-padding.jpg", discCount: 1);
+        CapturingBackgroundRemover remover = new();
+        StagePipeline pipeline = new(
+            new SheetLoader(new NotUsedPdfRasterizer()),
+            imageSplitOptions: TestSplitOptions,
+            remover: remover);
+        ImageProcessingSettings settings = new() { EllipsePaddingPx = 18 };
+
+        Assert.Single(await ToListAsync(pipeline.ProcessAsync([path], settings)));
+
+        Assert.Equal(18, remover.LastOptions?.EllipsePaddingPx);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithoutRuntimeSettingsPreservesConfiguredOptions()
+    {
+        string path = WriteJpegSheet("configured-options.jpg", discCount: 1);
+        CapturingBackgroundRemover remover = new();
+        StagePipeline pipeline = new(
+            new SheetLoader(new NotUsedPdfRasterizer()),
+            imageSplitOptions: TestSplitOptions,
+            removalOptions: new BackgroundRemovalOptions { EllipsePaddingPx = 11 },
+            remover: remover);
+
+        Assert.Single(await ToListAsync(pipeline.ProcessAsync([path])));
+
+        Assert.Equal(11, remover.LastOptions?.EllipsePaddingPx);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_InvalidEllipsePaddingReportsBackgroundRemovalFailure()
+    {
+        string path = WriteJpegSheet("invalid-ellipse-padding.jpg", discCount: 1);
+        StagePipeline pipeline = new(
+            new SheetLoader(new NotUsedPdfRasterizer()),
+            imageSplitOptions: TestSplitOptions);
+        ImageProcessingSettings settings = new() { EllipsePaddingPx = -1_000 };
+
+        BackgroundRemovalException exception = await Assert.ThrowsAsync<BackgroundRemovalException>(
+            async () => await ToListAsync(pipeline.ProcessAsync([path], settings)));
+
+        Assert.Contains("背景除去の設定", exception.Message, StringComparison.Ordinal);
+    }
+
     // #29 で blocking になったストリーミング契約の回帰。同一シートの後続円盤の処理が
     // 失敗しても、先行して変換できた円盤は呼び出し元へ届いていなければならない。
     // 背景除去が前景判定をやめた(#91)ことで自然に失敗する入力を作れなくなったため、
@@ -130,6 +231,19 @@ public sealed class StagePipelineTests : IDisposable
         }
     }
 
+    private sealed class CapturingBackgroundRemover : IBackgroundRemover
+    {
+        private readonly BackgroundRemover _inner = new();
+
+        public BackgroundRemovalOptions? LastOptions { get; private set; }
+
+        public BackgroundRemovalResult Remove(DiscImage disc, BackgroundRemovalOptions? options = null)
+        {
+            LastOptions = options;
+            return _inner.Remove(disc, options);
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))
@@ -145,6 +259,25 @@ public sealed class StagePipelineTests : IDisposable
         for (int index = 0; index < discCount; index++)
         {
             Cv2.Circle(sheet, new Point(250 + index * 450, 350), 120, Scalar.All(225), thickness: -1);
+        }
+
+        return sheet;
+    }
+
+    private static Mat BuildBrokenRingSheet()
+    {
+        Mat sheet = new(700, 1000, MatType.CV_8UC3, Scalar.All(255));
+        for (int angle = 0; angle < 360; angle += 30)
+        {
+            Cv2.Ellipse(
+                sheet,
+                new Point(250, 350),
+                new Size(120, 120),
+                angle: 0,
+                startAngle: angle,
+                endAngle: angle + 20,
+                Scalar.All(240),
+                thickness: 3);
         }
 
         return sheet;
@@ -188,5 +321,10 @@ public sealed class StagePipelineTests : IDisposable
                 yield return pageBytes;
             }
         }
+    }
+
+    private sealed class NullImageSourceFactory : IImageSourceFactory
+    {
+        public ImageSource? Create(byte[] premultipliedBgra, int width, int height) => null;
     }
 }

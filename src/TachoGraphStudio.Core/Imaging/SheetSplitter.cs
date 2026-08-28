@@ -32,6 +32,12 @@ public sealed class SheetSplitter
     private const double HoughCannyThreshold = 30.0;
     private const double HoughAccumulatorThreshold = 30.0;
 
+    // Hough は元画像の勾配から候補を出すが、利用者が設定した前景判定しきい値で
+    // 除外された円を復活させてはならない。実スキャン3種では正しい候補が
+    // threshold=1〜30 で30%以上、threshold=255で最大2.5%だったため間に置く
+    private const double HoughMinForegroundSupportRatio = 0.10;
+    private const int HoughSupportHalfWidthPx = 3;
+
     // Cv2.FitEllipse が要求する最小輪郭点数
     private const int MinContourPoints = 5;
 
@@ -46,7 +52,7 @@ public sealed class SheetSplitter
     {
         ArgumentNullException.ThrowIfNull(sheet);
         options ??= new DiscSplitOptions();
-        ValidateOptions(options);
+        DiscSplitOptions.Validate(options);
 
         using Mat pixels = DecodeSheet(sheet);
 
@@ -77,8 +83,11 @@ public sealed class SheetSplitter
         // 外周リングが分断され、断片が最小サイズに届かず候補に残らない。Hough は
         // 勾配を見るため連結性を要求しないので、取りこぼしを補完する(#91)。
         // 1 枚も取れないケースに限らず、通常の円盤と薄い円盤が混在するシートでは
-        // 薄い方だけが例外もなく欠落するため、常に実行して差分を足す
-        MergeHoughCandidates(candidates, analysis, scaleX, scaleY, options.Dpi);
+        // 薄い方だけが例外もなく欠落するため、常に実行して差分を足す。
+        // 候補生成には従来どおり元画像の勾配を使い、設定しきい値の反映は候補円周が
+        // 前景マスク上に存在するかの検証で行う。二値マスクを直接 Hough に渡すと
+        // threshold が小さい実スキャンで背景ノイズが強調され、内側リングや空白へ誤検出する
+        MergeHoughCandidates(candidates, analysis, mask, scaleX, scaleY, options.Dpi);
         candidates = RemoveNestedCandidates(candidates);
 
         if (candidates.Count == 0)
@@ -129,24 +138,6 @@ public sealed class SheetSplitter
         return discs;
     }
 
-    private static void ValidateOptions(DiscSplitOptions options)
-    {
-        if (options.Threshold is < 1 or > 255)
-        {
-            throw new ArgumentException($"Threshold は 1〜255 で指定してください: {options.Threshold}", nameof(options));
-        }
-
-        if (options.PaddingPx < 0)
-        {
-            throw new ArgumentException($"PaddingPx は 0 以上で指定してください: {options.PaddingPx}", nameof(options));
-        }
-
-        if (options.MaxDiscs < 1)
-        {
-            throw new ArgumentException($"MaxDiscs は 1 以上で指定してください: {options.MaxDiscs}", nameof(options));
-        }
-    }
-
     private static Mat DecodeSheet(SheetImage sheet)
     {
         Mat pixels = Cv2.ImDecode(sheet.ImageBytes, ImreadModes.Color);
@@ -173,17 +164,43 @@ public sealed class SheetSplitter
     private static void MergeHoughCandidates(
         List<Candidate> candidates,
         Mat analysis,
+        Mat foregroundMask,
         double scaleX,
         double scaleY,
         double? dpi)
     {
         foreach (Candidate hough in FindCandidatesByHough(analysis, scaleX, scaleY, dpi))
         {
-            if (!candidates.Any(existing => IsSameDisc(existing, hough)))
+            if (IsHoughCandidateSupported(foregroundMask, hough)
+                && !candidates.Any(existing => IsSameDisc(existing, hough)))
             {
                 candidates.Add(hough);
             }
         }
+    }
+
+    private static bool IsHoughCandidateSupported(Mat foregroundMask, Candidate candidate)
+    {
+        using Mat annulus = Mat.Zeros(foregroundMask.Size(), MatType.CV_8UC1).ToMat();
+        Point center = new((int)Math.Round(candidate.Center.X), (int)Math.Round(candidate.Center.Y));
+        int radius = Math.Max(1, (int)Math.Round(candidate.Diameter / 2));
+        Cv2.Circle(
+            annulus,
+            center,
+            radius + HoughSupportHalfWidthPx,
+            Scalar.All(255),
+            thickness: -1);
+        Cv2.Circle(
+            annulus,
+            center,
+            Math.Max(1, radius - HoughSupportHalfWidthPx),
+            Scalar.All(0),
+            thickness: -1);
+
+        using Mat supported = new();
+        Cv2.BitwiseAnd(foregroundMask, annulus, supported);
+        return Cv2.CountNonZero(supported)
+            >= Cv2.CountNonZero(annulus) * HoughMinForegroundSupportRatio;
     }
 
     // 円盤の内側にある印刷リングが独立した候補として残ることがある。DPI が既知なら
@@ -235,7 +252,11 @@ public sealed class SheetSplitter
     // 円盤は直径が規格で固定されているため半径の探索範囲を厳しく絞れる。範囲を緩めると
     // 誤検出が激増する(実測で 5 枚のシートに対し 15 個検出)ので、DPI が既知で規格径を
     // 計算できる場合にのみ使う(#91)
-    private static List<Candidate> FindCandidatesByHough(Mat analysis, double scaleX, double scaleY, double? dpi)
+    private static List<Candidate> FindCandidatesByHough(
+        Mat analysis,
+        double scaleX,
+        double scaleY,
+        double? dpi)
     {
         if (dpi is not (>= MinValidDpi and <= MaxValidDpi))
         {
@@ -449,10 +470,22 @@ public sealed class SheetSplitter
         double scaleY,
         int paddingPx)
     {
-        int x0 = Math.Max(0, (int)(candidate.Left / scaleX) - paddingPx);
-        int y0 = Math.Max(0, (int)(candidate.Top / scaleY) - paddingPx);
-        int x1 = Math.Min(sheet.Width, (int)((candidate.Left + candidate.Width) / scaleX) + paddingPx);
-        int y1 = Math.Min(sheet.Height, (int)((candidate.Top + candidate.Height) / scaleY) + paddingPx);
+        int x0 = (int)Math.Clamp(
+            (long)(candidate.Left / scaleX) - paddingPx,
+            0,
+            sheet.Width);
+        int y0 = (int)Math.Clamp(
+            (long)(candidate.Top / scaleY) - paddingPx,
+            0,
+            sheet.Height);
+        int x1 = (int)Math.Clamp(
+            (long)((candidate.Left + candidate.Width) / scaleX) + paddingPx,
+            0,
+            sheet.Width);
+        int y1 = (int)Math.Clamp(
+            (long)((candidate.Top + candidate.Height) / scaleY) + paddingPx,
+            0,
+            sheet.Height);
 
         Rect region = new(x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
         using Mat regionView = new(sheet, region);

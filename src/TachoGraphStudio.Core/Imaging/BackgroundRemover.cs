@@ -15,13 +15,23 @@ public sealed class BackgroundRemover : IBackgroundRemover
         options ??= new BackgroundRemovalOptions();
 
         Mat pixels = disc.Pixels;
-        float diameter = disc.DiscDiameter + (options.EllipsePaddingPx * 2);
-        if (diameter < 1)
+        double requestedDiameter = disc.DiscDiameter + (options.EllipsePaddingPx * 2.0);
+        if (requestedDiameter < 1)
         {
             throw new ArgumentException(
                 $"EllipsePaddingPx が負方向に大きすぎて円が消失します: {options.EllipsePaddingPx}",
                 nameof(options));
         }
+        // 画像全体を覆う直径より大きな正のマージンは結果を変えない。ユーザー入力が
+        // 極端でも OpenCV の座標変換をオーバーフローさせないよう有効径へ制限する
+        double maxRadius = new[]
+        {
+            Distance(disc.DiscCenter.X, disc.DiscCenter.Y),
+            Distance(pixels.Width - disc.DiscCenter.X, disc.DiscCenter.Y),
+            Distance(disc.DiscCenter.X, pixels.Height - disc.DiscCenter.Y),
+            Distance(pixels.Width - disc.DiscCenter.X, pixels.Height - disc.DiscCenter.Y),
+        }.Max();
+        float diameter = (float)Math.Min(requestedDiameter, (maxRadius * 2) + 1);
 
         RotatedRect circle = new(disc.DiscCenter, new Size2f(diameter, diameter), 0f);
         Rect region = circle.BoundingRect().Intersect(new Rect(0, 0, pixels.Width, pixels.Height));
@@ -43,4 +53,6 @@ public sealed class BackgroundRemover : IBackgroundRemover
 
     private static string DescribeSource(DiscImage disc)
         => $"{disc.SourcePath}（{disc.PageIndex + 1} ページ目 No.{disc.Index + 1}）";
+
+    private static double Distance(double x, double y) => Math.Sqrt((x * x) + (y * y));
 }
