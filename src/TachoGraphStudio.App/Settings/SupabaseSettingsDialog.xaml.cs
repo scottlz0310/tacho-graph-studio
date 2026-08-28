@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using Microsoft.UI.Xaml;
@@ -6,6 +7,8 @@ using Microsoft.UI.Xaml.Controls;
 using TachoGraphStudio.Core.Auth;
 using TachoGraphStudio.Core.Roster;
 using TachoGraphStudio.Core.Settings;
+
+using WinRT.Interop;
 
 using WinUIEx;
 
@@ -58,7 +61,8 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
 
     public ImageProcessingSettings? ImageProcessingResult { get; private set; }
 
-    public Task<bool> ShowAsync()
+    /// <summary>設定ウィンドウを <paramref name="ownerHandle"/> の所有ウィンドウとして表示する。</summary>
+    public Task<bool> ShowAsync(nint ownerHandle)
     {
         if (_isShown)
         {
@@ -66,6 +70,8 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
         }
 
         _isShown = true;
+        // owner を設定して親より前面に固定する。親の入力抑止は呼び出し側の EnableWindow が担う
+        SetWindowLongPtrW(WindowNative.GetWindowHandle(this), GwlpHwndParent, ownerHandle);
         Activate();
         this.CenterOnScreen();
         return _closed.Task;
@@ -396,4 +402,11 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
         ErrorTextBlock.Text = string.Empty;
         ErrorTextBlock.Visibility = Visibility.Collapsed;
     }
+
+    private const int GwlpHwndParent = -8;
+
+    // LibraryImport は AllowUnsafeBlocks をプロジェクト全体で要求する（SYSLIB1062）。
+    // blittable なハンドル・整数だけを扱うため、この 1 箇所のために unsafe は解禁しない
+    [DllImport("user32.dll")]
+    private static extern nint SetWindowLongPtrW(nint windowHandle, int index, nint value);
 }

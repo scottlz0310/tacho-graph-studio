@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -669,15 +670,19 @@ public sealed partial class MainWindow : Window
             _loginVendorClient,
             selectSupabaseSection);
 
+        // 設定ダイアログは独立した Window のため、hit test の抑止だけではタイトルバー(閉じる)が
+        // 生き残り、表示中に親を閉じられる。EnableWindow で親をモーダル相当に無効化し、
+        // 設定反映前の状態 flush と破棄済み Window への Activate() を防ぐ
+        nint ownerHandle = WindowNative.GetWindowHandle(this);
         bool accepted;
-        RootGrid.IsHitTestVisible = false;
+        EnableWindow(ownerHandle, false);
         try
         {
-            accepted = await dialog.ShowAsync();
+            accepted = await dialog.ShowAsync(ownerHandle);
         }
         finally
         {
-            RootGrid.IsHitTestVisible = true;
+            EnableWindow(ownerHandle, true);
             Activate();
         }
 
@@ -727,4 +732,10 @@ public sealed partial class MainWindow : Window
             return (null, true);
         }
     }
+
+    // LibraryImport は AllowUnsafeBlocks をプロジェクト全体で要求する（SYSLIB1062）。
+    // blittable なハンドル・BOOL だけを扱うため、この 1 箇所のために unsafe は解禁しない
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnableWindow(nint windowHandle, [MarshalAs(UnmanagedType.Bool)] bool enable);
 }
