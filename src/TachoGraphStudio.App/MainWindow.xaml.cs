@@ -79,7 +79,7 @@ public sealed partial class MainWindow : Window
         FileTemplateStore templateStore = new(Path.Combine(localFolderPath, "templates"));
 
         StageViewModel = new StageViewModel(
-            new StagePipeline(new SheetLoader(new WindowsPdfRasterizer())),
+            new StagePipeline(new SheetLoader(new WindowsPdfRasterizer(Program.GetSystemRasterizationScale))),
             new WriteableBitmapImageSourceFactory(),
             templateStore);
 
@@ -257,6 +257,18 @@ public sealed partial class MainWindow : Window
             StageViewModel.ExportDpi = exportDpi;
         }
 
+        if (state.ImageProcessing is { } imageProcessing)
+        {
+            try
+            {
+                StageViewModel.ProcessingSettings = imageProcessing;
+            }
+            catch (ArgumentException)
+            {
+                // 手動編集などで範囲外になった項目は適用せず、既定値で安全に起動する
+            }
+        }
+
         if (state.SidebarWidth is { } sidebarWidth && double.IsFinite(sidebarWidth))
         {
             SidebarColumn.Width = new GridLength(
@@ -410,6 +422,7 @@ public sealed partial class MainWindow : Window
             if (e.PropertyName is nameof(StageViewModel.OutputDirectory)
                 or nameof(StageViewModel.TargetDate)
                 or nameof(StageViewModel.ExportDpi)
+                or nameof(StageViewModel.ProcessingSettings)
                 or nameof(StageViewModel.SelectedTemplate))
             {
                 RequestSaveAppState();
@@ -471,6 +484,7 @@ public sealed partial class MainWindow : Window
             LastTargetDate = StageViewModel.TargetDate,
             SelectedTemplateId = StageViewModel.SelectedTemplate?.Id,
             ExportDpi = StageViewModel.ExportDpi,
+            ImageProcessing = StageViewModel.ProcessingSettings,
             LastShownVersion = _lastShownVersion,
             SidebarWidth = SidebarColumn.ActualWidth,
             Window = _windowPlacementTracker.Capture(isMaximized),
@@ -496,6 +510,11 @@ public sealed partial class MainWindow : Window
     private async void OnOpenSettingsButtonClick(object sender, RoutedEventArgs e)
     {
         await OpenSettingsDialogAsync();
+    }
+
+    private async void OnReprocessSheetsButtonClick(object sender, RoutedEventArgs e)
+    {
+        await StageViewModel.ReprocessAsync();
     }
 
     private async Task OpenTemplateEditorAsync()
@@ -597,7 +616,7 @@ public sealed partial class MainWindow : Window
 
             if (promptIfUnset)
             {
-                await OpenSettingsDialogAsync();
+                await OpenSettingsDialogAsync(selectSupabaseSection: true);
             }
 
             return;
@@ -640,19 +659,36 @@ public sealed partial class MainWindow : Window
         return new CachedVendorClient(remoteClient, cache);
     }
 
-    private async Task OpenSettingsDialogAsync()
+    private async Task OpenSettingsDialogAsync(bool selectSupabaseSection = false)
     {
         (SupabaseCredentials? existingCredentials, _) = await TryReadCredentialsAsync();
         SupabaseSettingsDialog dialog = new(
             existingCredentials,
+            StageViewModel.ProcessingSettings,
             _credentialsValidator,
-            _loginVendorClient)
-        {
-            XamlRoot = Content.XamlRoot,
-        };
+            _loginVendorClient,
+            selectSupabaseSection);
 
-        ContentDialogResult result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary || dialog.Result is null)
+        bool accepted;
+        RootGrid.IsHitTestVisible = false;
+        try
+        {
+            accepted = await dialog.ShowAsync();
+        }
+        finally
+        {
+            RootGrid.IsHitTestVisible = true;
+            Activate();
+        }
+
+        if (!accepted || dialog.ImageProcessingResult is null)
+        {
+            return;
+        }
+
+        StageViewModel.ProcessingSettings = dialog.ImageProcessingResult;
+
+        if (dialog.Result is null)
         {
             return;
         }

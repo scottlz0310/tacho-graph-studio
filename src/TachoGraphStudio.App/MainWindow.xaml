@@ -256,6 +256,11 @@
                         IsEnabled="{x:Bind StageViewModel.IsImportEnabled, Mode=OneWay}"
                         Style="{StaticResource AccentButtonStyle}"
                         ToolTipService.ToolTip="PDF / JPEG のシートを取り込む" />
+                    <Button
+                        Click="OnReprocessSheetsButtonClick"
+                        Content="再処理"
+                        IsEnabled="{x:Bind StageViewModel.CanReprocess, Mode=OneWay}"
+                        ToolTipService.ToolTip="直近に取り込んだシートを現在の画像処理設定で処理し直す" />
                     <ProgressRing
                         Width="24"
                         Height="24"
@@ -277,7 +282,7 @@
                     <Button
                         Click="OnOpenSettingsButtonClick"
                         Content="設定"
-                        ToolTipService.ToolTip="Supabase 接続設定を開く" />
+                        ToolTipService.ToolTip="画像処理・Supabase 接続の設定を開く" />
                 </StackPanel>
                 <StackPanel Grid.Row="1" Spacing="8">
                     <InfoBar

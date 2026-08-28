@@ -6,4 +6,9 @@ public sealed class BackgroundRemovalException : Exception
         : base(message)
     {
     }
+
+    public BackgroundRemovalException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

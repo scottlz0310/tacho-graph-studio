@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using TachoGraphStudio.Core.Imaging;
 using TachoGraphStudio.Core.Naming;
 using TachoGraphStudio.Core.Roster;
+using TachoGraphStudio.Core.Settings;
 using TachoGraphStudio.Core.Templates;
 
 namespace TachoGraphStudio.App.Stage;
@@ -21,6 +22,8 @@ public sealed partial class StageViewModel : ObservableObject
     private readonly IStagePipeline _pipeline;
     private readonly ITemplateStore _templateStore;
     private int _exportDpi = DiscComposer.DefaultDpi;
+    private IReadOnlyList<string> _lastImportedPaths = [];
+    private ImageProcessingSettings _processingSettings = ImageProcessingSettings.Default;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedDisc))]
@@ -47,6 +50,7 @@ public sealed partial class StageViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsImportEnabled))]
+    [NotifyPropertyChangedFor(nameof(CanReprocess))]
     public partial bool IsImporting { get; set; }
 
     [ObservableProperty]
@@ -92,6 +96,17 @@ public sealed partial class StageViewModel : ObservableObject
         }
     }
 
+    public ImageProcessingSettings ProcessingSettings
+    {
+        get => _processingSettings;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            value.Validate();
+            SetProperty(ref _processingSettings, value);
+        }
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasTemplateWarning))]
     public partial string? TemplateWarning { get; set; }
@@ -128,6 +143,8 @@ public sealed partial class StageViewModel : ObservableObject
     public bool HasTemplateWarning => TemplateWarning is not null;
 
     public bool IsImportEnabled => !IsImporting;
+
+    public bool CanReprocess => _lastImportedPaths.Count > 0 && !IsImporting;
 
     public bool HasImportError => ImportError is not null;
 
@@ -478,6 +495,9 @@ public sealed partial class StageViewModel : ObservableObject
             return;
         }
 
+        _lastImportedPaths = [.. paths];
+        OnPropertyChanged(nameof(CanReprocess));
+
         // 直近の選択(新規円盤の初期値、#43)は SelectedDisc = null で失われる前に退避する
         string? lastUsedTemplateId = SelectedTemplate?.Id;
 
@@ -490,7 +510,10 @@ public sealed partial class StageViewModel : ObservableObject
 
         try
         {
-            await foreach (ProcessedDisc disc in _pipeline.ProcessAsync(paths, cancellationToken))
+            await foreach (ProcessedDisc disc in _pipeline.ProcessAsync(
+                paths,
+                ProcessingSettings,
+                cancellationToken))
             {
                 DiscWorkItem item = new(Discs.Count + 1, disc)
                 {
@@ -515,12 +538,25 @@ public sealed partial class StageViewModel : ObservableObject
         catch (Exception exception)
             when (exception is SheetLoadException or DiscSplitException or BackgroundRemovalException)
         {
-            ImportError = exception.Message;
+            ImportError = exception is DiscSplitException
+                ? exception.Message + "。設定の「画像処理」で値を調整し、「再処理」を実行してください。"
+                : exception.Message;
         }
         finally
         {
             IsImporting = false;
             IsEmptyStateVisible = Discs.Count == 0;
         }
+    }
+
+    public Task ReprocessAsync(CancellationToken cancellationToken = default)
+    {
+        if (!CanReprocess)
+        {
+            return Task.CompletedTask;
+        }
+
+        IReadOnlyList<string> paths = _lastImportedPaths;
+        return ImportAsync(paths, cancellationToken);
     }
 }

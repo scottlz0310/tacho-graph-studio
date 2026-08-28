@@ -5,6 +5,7 @@ using OpenCvSharp;
 
 using TachoGraphStudio.App.Imaging;
 using TachoGraphStudio.Core.Imaging;
+using TachoGraphStudio.Core.Settings;
 
 namespace TachoGraphStudio.App.Stage;
 
@@ -40,16 +41,38 @@ public sealed class StagePipeline : IStagePipeline
 
     public async IAsyncEnumerable<ProcessedDisc> ProcessAsync(
         IReadOnlyList<string> paths,
+        ImageProcessingSettings? settings = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(paths);
+        DiscSplitOptions pdfSplitOptions = _pdfSplitOptions;
+        DiscSplitOptions imageSplitOptions = _imageSplitOptions;
+        BackgroundRemovalOptions removalOptions = _removalOptions;
+        if (settings is not null)
+        {
+            settings.Validate();
+            pdfSplitOptions = pdfSplitOptions with
+            {
+                Threshold = settings.Threshold,
+                PaddingPx = settings.PaddingPx,
+            };
+            imageSplitOptions = imageSplitOptions with
+            {
+                Threshold = settings.Threshold,
+                PaddingPx = settings.PaddingPx,
+            };
+            removalOptions = removalOptions with
+            {
+                EllipsePaddingPx = settings.EllipsePaddingPx,
+            };
+        }
 
         await foreach (SheetImage sheet in _sheetLoader.LoadAsync(paths, cancellationToken))
         {
             DiscSplitOptions splitOptions =
                 Path.GetExtension(sheet.SourcePath).Equals(".pdf", StringComparison.OrdinalIgnoreCase)
-                    ? _pdfSplitOptions
-                    : _imageSplitOptions;
+                    ? pdfSplitOptions
+                    : imageSplitOptions;
 
             // 円盤単位で逐次 yield し、後続円盤の失敗時も変換済みの円盤は呼び出し元へ届いた状態にする
             IReadOnlyList<DiscImage> discs = await Task.Run(
@@ -59,7 +82,9 @@ public sealed class StagePipeline : IStagePipeline
             {
                 foreach (DiscImage disc in discs)
                 {
-                    yield return await Task.Run(() => ConvertDisc(disc), cancellationToken);
+                    yield return await Task.Run(
+                        () => ConvertDisc(disc, removalOptions),
+                        cancellationToken);
                 }
             }
             finally
@@ -72,10 +97,19 @@ public sealed class StagePipeline : IStagePipeline
         }
     }
 
-    private ProcessedDisc ConvertDisc(DiscImage disc)
+    private ProcessedDisc ConvertDisc(DiscImage disc, BackgroundRemovalOptions removalOptions)
     {
-        using BackgroundRemovalResult removed = _remover.Remove(disc, _removalOptions);
-        return ToProcessedDisc(disc, removed);
+        try
+        {
+            using BackgroundRemovalResult removed = _remover.Remove(disc, removalOptions);
+            return ToProcessedDisc(disc, removed);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new BackgroundRemovalException(
+                $"背景除去の設定が円盤に適用できません: {exception.Message}",
+                exception);
+        }
     }
 
     private static ProcessedDisc ToProcessedDisc(DiscImage disc, BackgroundRemovalResult removed)

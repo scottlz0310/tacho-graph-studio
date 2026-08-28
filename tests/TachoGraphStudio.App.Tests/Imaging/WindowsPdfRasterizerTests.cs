@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
 
@@ -25,7 +26,7 @@ public sealed class WindowsPdfRasterizerTests : IDisposable
     public async Task RasterizePagesAsync_YieldsEncodedImagePerPage(int pageCount)
     {
         string path = WritePdf(pageCount);
-        WindowsPdfRasterizer rasterizer = new(dpi: 96);
+        WindowsPdfRasterizer rasterizer = new(() => 1.0, dpi: 96);
 
         List<byte[]> pages = [];
         await foreach (byte[] page in rasterizer.RasterizePagesAsync(path))
@@ -37,11 +38,45 @@ public sealed class WindowsPdfRasterizerTests : IDisposable
         Assert.All(pages, page => Assert.True(page.Length > 0));
     }
 
+    [Theory]
+    [InlineData(96.0, 600.0, 1.0, 600u)]
+    [InlineData(96.0, 600.0, 1.25, 480u)]
+    [InlineData(96.0, 600.0, 1.5, 400u)]
+    [InlineData(96.0, 600.0, 2.0, 300u)]
+    public void CalculateDestinationLength_CompensatesSystemScale(
+        double pageLengthDip,
+        double dpi,
+        double systemRasterizationScale,
+        uint expected)
+    {
+        uint actual = WindowsPdfRasterizer.CalculateDestinationLength(
+            pageLengthDip,
+            dpi,
+            systemRasterizationScale);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public async Task RasterizePagesAsync_CompensatesRendererScaleToRequestedPhysicalPixels()
+    {
+        string path = WritePdf(pageCount: 1);
+        WindowsPdfRasterizer scaleProbe = new(() => 1.0, dpi: 96);
+        byte[] probePage = await ReadFirstPageAsync(scaleProbe, path);
+        (uint probeWidth, _) = ReadPngDimensions(probePage);
+        double systemRendererScale = probeWidth / 96.0;
+        WindowsPdfRasterizer rasterizer = new(() => systemRendererScale, dpi: 96);
+
+        byte[] page = await ReadFirstPageAsync(rasterizer, path);
+
+        Assert.Equal((96u, 96u), ReadPngDimensions(page));
+    }
+
     [Fact]
     public async Task RasterizePagesAsync_CancellationDuringEnumerationStopsBeforeNextPage()
     {
         string path = WritePdf(pageCount: 2);
-        WindowsPdfRasterizer rasterizer = new(dpi: 96);
+        WindowsPdfRasterizer rasterizer = new(() => 1.0, dpi: 96);
         using CancellationTokenSource cancellation = new();
 
         await using IAsyncEnumerator<byte[]> pages = rasterizer
@@ -59,7 +94,7 @@ public sealed class WindowsPdfRasterizerTests : IDisposable
     public async Task RasterizePagesAsync_PreCancelledTokenYieldsNothing()
     {
         string path = WritePdf(pageCount: 1);
-        WindowsPdfRasterizer rasterizer = new(dpi: 96);
+        WindowsPdfRasterizer rasterizer = new(() => 1.0, dpi: 96);
         using CancellationTokenSource cancellation = new();
         cancellation.Cancel();
 
@@ -69,6 +104,30 @@ public sealed class WindowsPdfRasterizerTests : IDisposable
             {
             }
         });
+    }
+
+    private static async Task<byte[]> ReadFirstPageAsync(
+        WindowsPdfRasterizer rasterizer,
+        string path)
+    {
+        await foreach (byte[] page in rasterizer.RasterizePagesAsync(path))
+        {
+            return page;
+        }
+
+        throw new InvalidOperationException("テスト PDF にページがありません。");
+    }
+
+    private static (uint Width, uint Height) ReadPngDimensions(byte[] png)
+    {
+        Assert.True(png.Length >= 24);
+        Assert.Equal(0x89, png[0]);
+        Assert.Equal((byte)'P', png[1]);
+        Assert.Equal((byte)'N', png[2]);
+        Assert.Equal((byte)'G', png[3]);
+        return (
+            BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(16, 4)),
+            BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(20, 4)));
     }
 
     public void Dispose()

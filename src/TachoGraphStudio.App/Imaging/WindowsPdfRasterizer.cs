@@ -10,18 +10,24 @@ namespace TachoGraphStudio.App.Imaging;
 
 public sealed class WindowsPdfRasterizer : IPdfRasterizer
 {
-    // Windows.Data.Pdf の PdfPage.Size は 1/96 インチ単位
+    // Windows.Data.Pdf の PdfPage.Size と DestinationWidth/Height は DIP (1/96 インチ) 単位。
+    // RenderToStreamAsync のビットマップはプロセスのシステム DPI を適用した物理ピクセルになる。
     private const double BaseDpi = 96.0;
 
     // A3 600dpi 級スキャンの品質を落とさない既定値（NFR-03）
     public const double DefaultDpi = 600.0;
 
     private readonly double _dpi;
+    private readonly Func<double> _systemRasterizationScaleProvider;
 
-    public WindowsPdfRasterizer(double dpi = DefaultDpi)
+    public WindowsPdfRasterizer(
+        Func<double> systemRasterizationScaleProvider,
+        double dpi = DefaultDpi)
     {
+        ArgumentNullException.ThrowIfNull(systemRasterizationScaleProvider);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dpi);
 
+        _systemRasterizationScaleProvider = systemRasterizationScaleProvider;
         _dpi = dpi;
     }
 
@@ -37,10 +43,17 @@ public sealed class WindowsPdfRasterizer : IPdfRasterizer
             cancellationToken.ThrowIfCancellationRequested();
 
             using PdfPage page = document.GetPage(pageIndex);
+            double systemRasterizationScale = _systemRasterizationScaleProvider();
+            if (!double.IsFinite(systemRasterizationScale) || systemRasterizationScale <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"PDF のシステムレンダリング倍率が不正です: {systemRasterizationScale}");
+            }
+
             PdfPageRenderOptions options = new()
             {
-                DestinationWidth = (uint)Math.Round(page.Size.Width * _dpi / BaseDpi),
-                DestinationHeight = (uint)Math.Round(page.Size.Height * _dpi / BaseDpi),
+                DestinationWidth = CalculateDestinationLength(page.Size.Width, _dpi, systemRasterizationScale),
+                DestinationHeight = CalculateDestinationLength(page.Size.Height, _dpi, systemRasterizationScale),
             };
 
             using InMemoryRandomAccessStream stream = new();
@@ -55,5 +68,23 @@ public sealed class WindowsPdfRasterizer : IPdfRasterizer
             cancellationToken.ThrowIfCancellationRequested();
             yield return pageBytes;
         }
+    }
+
+    internal static uint CalculateDestinationLength(
+        double pageLengthDip,
+        double dpi,
+        double systemRasterizationScale)
+    {
+        double destinationLengthDip = pageLengthDip * dpi / BaseDpi / systemRasterizationScale;
+        if (!double.IsFinite(destinationLengthDip)
+            || destinationLengthDip < 1
+            || destinationLengthDip > uint.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(pageLengthDip),
+                $"PDF のレンダリングサイズが範囲外です: {destinationLengthDip}");
+        }
+
+        return checked((uint)Math.Round(destinationLengthDip, MidpointRounding.AwayFromZero));
     }
 }

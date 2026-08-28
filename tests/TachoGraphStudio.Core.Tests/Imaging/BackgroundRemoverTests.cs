@@ -158,6 +158,19 @@ public sealed class BackgroundRemoverTests
     }
 
     [Fact]
+    public void Remove_MaximumPositivePaddingSafelyCoversWholeImage()
+    {
+        using DiscImage disc = BuildDisc(300, 300, 150, 150, 120);
+
+        using BackgroundRemovalResult result = new BackgroundRemover().Remove(
+            disc,
+            new BackgroundRemovalOptions { EllipsePaddingPx = int.MaxValue });
+
+        Assert.Equal(new Rect(0, 0, 300, 300), result.RegionInDisc);
+        Assert.Equal(255, result.Pixels.At<Vec4b>(0, 0).Item3);
+    }
+
+    [Fact]
     public void Remove_CircleOutsideImageThrowsWithContext()
     {
         using Mat pixels = new(200, 200, MatType.CV_8UC3, Scalar.All(255));

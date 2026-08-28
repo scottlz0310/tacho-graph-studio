@@ -15,6 +15,9 @@ public sealed record AppState
     // PNG 書き出し DPI。null は現行の既定値(600dpi)を表す
     public int? ExportDpi { get; init; }
 
+    // null は従来の画像処理既定値を表す。旧 app-state.json との後方互換を維持する
+    public ImageProcessingSettings? ImageProcessing { get; init; }
+
     // 更新後の変更点を最後に表示したパッケージバージョン。null は未記録を表す。
     // 既存状態ファイルでの未記録と新規インストールの区別は表示側が行う
     public string? LastShownVersion { get; init; }

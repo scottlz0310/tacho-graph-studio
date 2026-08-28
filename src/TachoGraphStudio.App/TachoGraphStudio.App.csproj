@@ -43,6 +43,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="TachoGraphStudio.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- MSIX には appxrecipe 経由でプロジェクト配下から直接取り込まれるが、
          AppWindow.SetIcon は実行ディレクトリを基準に解決するため出力にも配置する（#79） -->
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />

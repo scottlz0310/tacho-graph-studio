@@ -8,6 +8,7 @@ using TachoGraphStudio.App.Stage;
 using TachoGraphStudio.App.Tests.Templates;
 using TachoGraphStudio.Core.Imaging;
 using TachoGraphStudio.Core.Roster;
+using TachoGraphStudio.Core.Settings;
 using TachoGraphStudio.Core.Templates;
 
 namespace TachoGraphStudio.App.Tests.Stage;
@@ -205,6 +206,29 @@ public sealed class StageViewModelTests : IDisposable
         Assert.Empty(viewModel.Discs);
         Assert.Equal(0, pipeline.ProcessCallCount);
         Assert.True(viewModel.IsEmptyStateVisible);
+    }
+
+    [Fact]
+    public async Task ReprocessAsync_UsesLastPathsAndCurrentImageProcessingSettings()
+    {
+        FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
+        StageViewModel viewModel = CreateViewModel(pipeline);
+        Assert.False(viewModel.CanReprocess);
+
+        await viewModel.ImportAsync(["first.pdf", "second.jpg"]);
+        viewModel.ProcessingSettings = new ImageProcessingSettings
+        {
+            Threshold = 12,
+            PaddingPx = 30,
+            EllipsePaddingPx = -5,
+        };
+
+        await viewModel.ReprocessAsync();
+
+        Assert.Equal(2, pipeline.ProcessCallCount);
+        Assert.Equal(["first.pdf", "second.jpg"], pipeline.LastPaths);
+        Assert.Equal(viewModel.ProcessingSettings, pipeline.LastSettings);
+        Assert.True(viewModel.CanReprocess);
     }
 
     [Fact]
@@ -932,11 +956,18 @@ public sealed class StageViewModelTests : IDisposable
 
         public int ProcessCallCount { get; private set; }
 
+        public IReadOnlyList<string> LastPaths { get; private set; } = [];
+
+        public ImageProcessingSettings? LastSettings { get; private set; }
+
         public async IAsyncEnumerable<ProcessedDisc> ProcessAsync(
             IReadOnlyList<string> paths,
+            ImageProcessingSettings? settings = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             ProcessCallCount++;
+            LastPaths = [.. paths];
+            LastSettings = settings;
             await Task.Yield();
             foreach (ProcessedDisc disc in Discs)
             {

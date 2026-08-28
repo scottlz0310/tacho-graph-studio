@@ -82,10 +82,18 @@ public static class Program
     }
 
     /// <summary>システム DPI を Windows の表示倍率（100 / 125 / 150 …）に換算する。</summary>
-    private static int GetSystemScale() => (int)Math.Round(GetDpiForSystem() * 100.0 / 96.0);
+    private static int GetSystemScale() => (int)Math.Round(GetSystemRasterizationScale() * 100.0);
+
+    // Windows.Data.Pdf はウィンドウがあるモニターの DPI ではなく、プロセスのシステム DPI で
+    // DestinationWidth/Height (DIP) を物理ピクセルへ変換する。モニター移動後も同じ基準を使う。
+    internal static double GetSystemRasterizationScale()
+        => GetSystemDpiForProcess(GetCurrentProcess()) / 96.0;
 
     // LibraryImport は AllowUnsafeBlocks をプロジェクト全体で要求する（SYSLIB1062）。
-    // 引数なし・戻り値 blittable のこの 1 箇所のために unsafe を解禁はしない
+    // blittable なハンドル・整数だけを扱うため、この 2 箇所のために unsafe は解禁しない
+    [DllImport("kernel32.dll")]
+    private static extern nint GetCurrentProcess();
+
     [DllImport("user32.dll")]
-    private static extern uint GetDpiForSystem();
+    private static extern uint GetSystemDpiForProcess(nint processHandle);
 }
