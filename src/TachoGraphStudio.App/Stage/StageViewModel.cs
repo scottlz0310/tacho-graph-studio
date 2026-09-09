@@ -186,6 +186,30 @@ public sealed partial class StageViewModel : ObservableObject
         }
     }
 
+    // アプリ状態(FR-22)へ書き出す項目。RestoreFrom と対になる(#137)
+    public AppState CaptureInto(AppState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return state with
+        {
+            OutputDirectory = OutputDirectory,
+            LastTargetDate = TargetDate,
+            SelectedTemplateId = SelectedTemplate?.Id,
+            ExportDpi = ExportDpi,
+            ImageProcessing = ProcessingSettings,
+        };
+    }
+
+    // 永続化のきっかけにするプロパティ。CaptureInto が書き出す項目と一致させる必要があり、
+    // ここへ足し忘れると変更が保存されなくなるため、対でテストして固定する(#137)
+    public static bool IsPersistedProperty(string? propertyName) => propertyName is
+        nameof(OutputDirectory)
+        or nameof(TargetDate)
+        or nameof(ExportDpi)
+        or nameof(ProcessingSettings)
+        or nameof(SelectedTemplate);
+
     // 保存済みアプリ状態(FR-22)の復元。状態ファイルは手動編集や旧バージョンの書き込みで
     // 壊れうるため、項目ごとに利用できる値かを判定し、駄目な項目だけ既定値のままにする(#137)。
     // 出力先の存在確認はファイルシステムに依存するため、判定を関数で受け取る

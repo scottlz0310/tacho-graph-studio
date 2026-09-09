@@ -406,11 +406,7 @@ public sealed partial class MainWindow : Window
 
         StageViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(StageViewModel.OutputDirectory)
-                or nameof(StageViewModel.TargetDate)
-                or nameof(StageViewModel.ExportDpi)
-                or nameof(StageViewModel.ProcessingSettings)
-                or nameof(StageViewModel.SelectedTemplate))
+            if (StageViewModel.IsPersistedProperty(e.PropertyName))
             {
                 RequestSaveAppState();
             }
@@ -458,6 +454,8 @@ public sealed partial class MainWindow : Window
 
     private Task SaveAppStateAsync() => AppStateSaver.TrySaveAsync(CaptureAppState());
 
+    // ステージ側の項目は StageViewModel が書き出す。ここでは WinUI からしか取れない
+    // 最大化状態・列幅・ウィンドウ配置と、表示済みバージョンを埋める
     private AppState CaptureAppState()
     {
         bool isMaximized = AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
@@ -465,17 +463,12 @@ public sealed partial class MainWindow : Window
             State: Microsoft.UI.Windowing.OverlappedPresenterState.Maximized,
         };
 
-        return new AppState
+        return StageViewModel.CaptureInto(new AppState
         {
-            OutputDirectory = StageViewModel.OutputDirectory,
-            LastTargetDate = StageViewModel.TargetDate,
-            SelectedTemplateId = StageViewModel.SelectedTemplate?.Id,
-            ExportDpi = StageViewModel.ExportDpi,
-            ImageProcessing = StageViewModel.ProcessingSettings,
             LastShownVersion = _lastShownVersion,
             SidebarWidth = SidebarColumn.ActualWidth,
             Window = _windowPlacementTracker.Capture(isMaximized),
-        };
+        });
     }
 
     // 処理対象日の一括指定(FR-14)。クリア(null)時は表示を直前の日付へ戻し、
