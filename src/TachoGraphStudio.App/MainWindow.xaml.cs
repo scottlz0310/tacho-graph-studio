@@ -518,6 +518,12 @@ public sealed partial class MainWindow : Window
         await OpenSettingsDialogAsync();
     }
 
+    // 名簿パネルの未接続導線から開く場合は、解消すべき設定のあるタブを直接開く
+    private async void OnOpenSupabaseSettingsButtonClick(object sender, RoutedEventArgs e)
+    {
+        await OpenSettingsDialogAsync(selectSupabaseSection: true);
+    }
+
     private async void OnReprocessSheetsButtonClick(object sender, RoutedEventArgs e)
     {
         await StageViewModel.ReprocessAsync();
