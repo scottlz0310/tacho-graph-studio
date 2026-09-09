@@ -306,44 +306,38 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            string currentVersionText = FormatVersion(currentVersion);
-            Version? lastShownVersion = UpdateNotesVersionPolicy.ResolveLastShownVersion(
+            UpdateNotesPlan plan = UpdateNotesVersionPolicy.Plan(
                 _lastShownVersion,
-                _hasPersistedAppState);
-            if (UpdateNotesVersionPolicy.IsNewInstallation(
-                    _lastShownVersion,
-                    _hasPersistedAppState))
-            {
-                // 新規インストールでは変更履歴を表示せず、基準バージョンだけ記録する
-                _lastShownVersion = currentVersionText;
-                await AppStateSaver.TrySaveAsync(CaptureAppState());
-                return;
-            }
-
-            if (lastShownVersion is not null && lastShownVersion >= currentVersion)
-            {
-                return;
-            }
-
-            string changelogPath = Path.Combine(AppContext.BaseDirectory, "CHANGELOG.md");
-            string changelog = await File.ReadAllTextAsync(changelogPath);
-            IReadOnlyList<ChangelogSection> sections = ChangelogParser.SelectSections(
-                changelog,
-                lastShownVersion,
+                _hasPersistedAppState,
                 currentVersion);
-            if (sections.Count == 0)
+            if (plan.Action == UpdateNotesAction.None)
             {
                 return;
             }
 
-            UpdateNotesDialog dialog = new(
-                sections,
-                new Uri(
-                    $"https://github.com/scottlz0310/tacho-graph-studio/releases/tag/v{currentVersionText}"));
-            dialog.XamlRoot = Content.XamlRoot;
-            await dialog.ShowAsync();
+            if (plan.Action == UpdateNotesAction.Show)
+            {
+                string changelogPath = Path.Combine(AppContext.BaseDirectory, "CHANGELOG.md");
+                string changelog = await File.ReadAllTextAsync(changelogPath);
+                IReadOnlyList<ChangelogSection> sections = ChangelogParser.SelectSections(
+                    changelog,
+                    plan.LastShownVersion,
+                    currentVersion);
+                if (sections.Count == 0)
+                {
+                    return;
+                }
 
-            _lastShownVersion = currentVersionText;
+                string releaseTag = $"v{UpdateNotesVersionPolicy.FormatVersion(currentVersion)}";
+                UpdateNotesDialog dialog = new(
+                    sections,
+                    new Uri($"https://github.com/scottlz0310/tacho-graph-studio/releases/tag/{releaseTag}"));
+                dialog.XamlRoot = Content.XamlRoot;
+                await dialog.ShowAsync();
+            }
+
+            // 表示した場合も、新規インストールで表示を省いた場合も、基準バージョンを記録する
+            _lastShownVersion = UpdateNotesVersionPolicy.FormatVersion(currentVersion);
             await AppStateSaver.TrySaveAsync(CaptureAppState());
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -371,9 +365,6 @@ public sealed partial class MainWindow : Window
             return false;
         }
     }
-
-    private static string FormatVersion(Version version) =>
-        $"{version.Major}.{version.Minor}.{version.Build}";
 
     private void ApplySavedTemplateSelection(string? templateId)
     {
