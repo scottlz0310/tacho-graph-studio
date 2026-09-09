@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
     private readonly SheetLoader _sheetLoader;
     private readonly IImageSourceFactory _imageSourceFactory = new WriteableBitmapImageSourceFactory();
     private readonly WindowPlacementTracker _windowPlacementTracker = new();
+    private readonly RotationKeyStepCalculator _rotationKeyStepCalculator = new();
     private readonly TaskCompletionSource _initializationCompleted = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -88,6 +89,17 @@ public sealed partial class MainWindow : Window
             new StagePipeline(_sheetLoader),
             _imageSourceFactory,
             templateStore);
+
+        // Slider は矢印キーを自身の class handler で処理して Handled にするため、
+        // handledEventsToo で受け取り、連続押下の加速分だけを上乗せする(#133)
+        RotationSlider.AddHandler(
+            UIElement.KeyDownEvent,
+            new KeyEventHandler(OnRotationSliderKeyDown),
+            handledEventsToo: true);
+        RotationSlider.AddHandler(
+            UIElement.KeyUpEvent,
+            new KeyEventHandler(OnRotationSliderKeyUp),
+            handledEventsToo: true);
 
         TemplateEditorViewModel = new TemplateEditorViewModel(templateStore);
         TemplateEditor.ViewModel = TemplateEditorViewModel;
@@ -523,6 +535,20 @@ public sealed partial class MainWindow : Window
     {
         await OpenSettingsDialogAsync(selectSupabaseSection: true);
     }
+
+    // カーソルキーでの回転補正(#133)。Slider の既定処理に上乗せする角度は
+    // RotationKeyStepCalculator が決める
+    private void OnRotationSliderKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        double extraDelta = _rotationKeyStepCalculator.GetExtraDelta(e.Key, e.KeyStatus.WasKeyDown);
+        if (extraDelta != 0 && StageViewModel.SelectedDisc is { } disc)
+        {
+            disc.RotationAngle += extraDelta;
+        }
+    }
+
+    private void OnRotationSliderKeyUp(object sender, KeyRoutedEventArgs e)
+        => _rotationKeyStepCalculator.ReleaseKey(e.Key);
 
     private async void OnReprocessSheetsButtonClick(object sender, RoutedEventArgs e)
     {

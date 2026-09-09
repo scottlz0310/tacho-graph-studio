@@ -390,7 +390,11 @@
                                 HorizontalAlignment="Center"
                                 FontWeight="SemiBold"
                                 Text="回転補正" />
+                            <!-- カーソルキー 1 回押下のステップは SmallChange(既定 1)。StepFrequency は
+                                 値の丸め幅なので、0.1 度を保持できるよう両方を揃える。
+                                 連続押下の加速は code-behind で上乗せする(#133) -->
                             <Slider
+                                x:Name="RotationSlider"
                                 Grid.Row="1"
                                 HorizontalAlignment="Center"
                                 AutomationProperties.Name="回転角度"
@@ -398,7 +402,8 @@
                                 Maximum="180"
                                 Minimum="-180"
                                 Orientation="Vertical"
-                                StepFrequency="0.5"
+                                SmallChange="0.1"
+                                StepFrequency="0.1"
                                 Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
                             <NumberBox
                                 Grid.Row="2"
@@ -406,7 +411,7 @@
                                 IsEnabled="{x:Bind StageViewModel.HasSelectedDisc, Mode=OneWay}"
                                 Maximum="180"
                                 Minimum="-180"
-                                SmallChange="0.5"
+                                SmallChange="0.1"
                                 SpinButtonPlacementMode="Compact"
                                 Value="{x:Bind StageViewModel.SelectedDisc.RotationAngle, Mode=TwoWay, FallbackValue=0}" />
                             <Button
