@@ -33,6 +33,106 @@ public sealed class StageViewModelTests : IDisposable
         new FakeTemplateStore(),
         new DateOnly(2026, 7, 19));
 
+    // アプリ状態への書き出し(#137)。RestoreFrom と対になる
+    [Fact]
+    public async Task CaptureInto_WritesStageOwnedValues()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        await viewModel.LoadTemplatesAsync();
+        viewModel.OutputDirectory = @"C:\out";
+        viewModel.TargetDate = new DateOnly(2026, 9, 30);
+        viewModel.ExportDpi = 200;
+        viewModel.ProcessingSettings = new ImageProcessingSettings { Threshold = 21 };
+
+        AppState captured = viewModel.CaptureInto(new AppState());
+
+        Assert.Equal(@"C:\out", captured.OutputDirectory);
+        Assert.Equal(new DateOnly(2026, 9, 30), captured.LastTargetDate);
+        Assert.Equal(200, captured.ExportDpi);
+        Assert.Equal(21, captured.ImageProcessing?.Threshold);
+        Assert.Equal(viewModel.SelectedTemplate?.Id, captured.SelectedTemplateId);
+    }
+
+    // ViewModel が持たない項目(表示済みバージョン・列幅・ウィンドウ配置)は呼び出し側の値を残す
+    [Fact]
+    public void CaptureInto_KeepsValuesOwnedByCaller()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        AppState seed = new()
+        {
+            LastShownVersion = "0.3.0",
+            SidebarWidth = 480,
+            Window = new WindowPlacement(10, 20, 1200, 800, IsMaximized: true),
+        };
+
+        AppState captured = viewModel.CaptureInto(seed);
+
+        Assert.Equal("0.3.0", captured.LastShownVersion);
+        Assert.Equal(480, captured.SidebarWidth);
+        Assert.Equal(new WindowPlacement(10, 20, 1200, 800, IsMaximized: true), captured.Window);
+    }
+
+    [Fact]
+    public void CaptureInto_WithoutStateThrows()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+
+        Assert.Throws<ArgumentNullException>(() => viewModel.CaptureInto(null!));
+    }
+
+    // 保存対象プロパティ(#137)。CaptureInto が書き出す項目と一致していないと、
+    // 変更しても保存されない項目が生まれる
+    [Theory]
+    [InlineData(nameof(StageViewModel.OutputDirectory))]
+    [InlineData(nameof(StageViewModel.TargetDate))]
+    [InlineData(nameof(StageViewModel.ExportDpi))]
+    [InlineData(nameof(StageViewModel.ProcessingSettings))]
+    [InlineData(nameof(StageViewModel.SelectedTemplate))]
+    public void IsPersistedProperty_ReturnsTrueForPersistedProperties(string propertyName)
+    {
+        Assert.True(StageViewModel.IsPersistedProperty(propertyName));
+    }
+
+    // セッション内だけの状態は保存のきっかけにしない(無駄な書き込みを増やさない)
+    [Theory]
+    [InlineData(nameof(StageViewModel.SelectedDisc))]
+    [InlineData(nameof(StageViewModel.IsSaving))]
+    [InlineData(nameof(StageViewModel.IsImporting))]
+    [InlineData(nameof(StageViewModel.ImportError))]
+    [InlineData(nameof(StageViewModel.SkipHandwritten))]
+    [InlineData(nameof(StageViewModel.IsPreviewFullscreen))]
+    [InlineData("")]
+    [InlineData(null)]
+    public void IsPersistedProperty_ReturnsFalseForOtherProperties(string? propertyName)
+    {
+        Assert.False(StageViewModel.IsPersistedProperty(propertyName));
+    }
+
+    // 保存対象として宣言した各プロパティが、実際に CaptureInto の出力へ現れることを対で固定する
+    [Fact]
+    public async Task IsPersistedProperty_MatchesWhatCaptureIntoWrites()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        await viewModel.LoadTemplatesAsync();
+        AppState before = viewModel.CaptureInto(new AppState());
+
+        viewModel.OutputDirectory = @"C:\changed";
+        Assert.NotEqual(before.OutputDirectory, viewModel.CaptureInto(new AppState()).OutputDirectory);
+        Assert.True(StageViewModel.IsPersistedProperty(nameof(StageViewModel.OutputDirectory)));
+
+        viewModel.TargetDate = before.LastTargetDate!.Value.AddDays(1);
+        Assert.NotEqual(before.LastTargetDate, viewModel.CaptureInto(new AppState()).LastTargetDate);
+        Assert.True(StageViewModel.IsPersistedProperty(nameof(StageViewModel.TargetDate)));
+
+        viewModel.ExportDpi = viewModel.ExportDpiOptions.First(dpi => dpi != before.ExportDpi);
+        Assert.NotEqual(before.ExportDpi, viewModel.CaptureInto(new AppState()).ExportDpi);
+        Assert.True(StageViewModel.IsPersistedProperty(nameof(StageViewModel.ExportDpi)));
+
+        viewModel.ProcessingSettings = new ImageProcessingSettings { Threshold = 99 };
+        Assert.NotEqual(before.ImageProcessing, viewModel.CaptureInto(new AppState()).ImageProcessing);
+        Assert.True(StageViewModel.IsPersistedProperty(nameof(StageViewModel.ProcessingSettings)));
+    }
+
     // 保存済みアプリ状態の復元(#137)。状態ファイルは壊れうるため項目ごとに判定する
     [Fact]
     public void RestoreFrom_AppliesEverySavedValue()
