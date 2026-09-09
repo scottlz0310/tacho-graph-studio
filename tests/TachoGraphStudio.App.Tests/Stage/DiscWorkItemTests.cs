@@ -39,6 +39,24 @@ public sealed class DiscWorkItemTests
         Assert.Equal(expected, item.RotationAngle);
     }
 
+    // カーソルキー操作(#133)は 0.1 度ずつ加算するため、二進で表現できない誤差が
+    // 角度欄へ出ないよう UI の刻みへ丸める
+    [Theory]
+    [InlineData(0.30000000450000003, 0.3)]
+    [InlineData(0.04, 0.0)]
+    [InlineData(0.05, 0.1)]
+    [InlineData(-0.05, -0.1)]
+    [InlineData(12.34, 12.3)]
+    [InlineData(-12.36, -12.4)]
+    public void RotationAngle_IsRoundedToUiStep(double input, double expected)
+    {
+        DiscWorkItem item = BuildItem();
+
+        item.RotationAngle = input;
+
+        Assert.Equal(expected, item.RotationAngle);
+    }
+
     private static DiscWorkItem BuildItem() => new(
         number: 1,
         new ProcessedDisc(

@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
     private readonly SheetLoader _sheetLoader;
     private readonly IImageSourceFactory _imageSourceFactory = new WriteableBitmapImageSourceFactory();
     private readonly WindowPlacementTracker _windowPlacementTracker = new();
+    private readonly RotationKeyStepAccelerator _rotationKeyAccelerator = new();
     private readonly TaskCompletionSource _initializationCompleted = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -88,6 +89,17 @@ public sealed partial class MainWindow : Window
             new StagePipeline(_sheetLoader),
             _imageSourceFactory,
             templateStore);
+
+        // Slider は矢印キーを自身の class handler で処理して Handled にするため、
+        // handledEventsToo で受け取り、連続押下の加速分だけを上乗せする(#133)
+        RotationSlider.AddHandler(
+            UIElement.KeyDownEvent,
+            new KeyEventHandler(OnRotationSliderKeyDown),
+            handledEventsToo: true);
+        RotationSlider.AddHandler(
+            UIElement.KeyUpEvent,
+            new KeyEventHandler(OnRotationSliderKeyUp),
+            handledEventsToo: true);
 
         TemplateEditorViewModel = new TemplateEditorViewModel(templateStore);
         TemplateEditor.ViewModel = TemplateEditorViewModel;
@@ -517,6 +529,44 @@ public sealed partial class MainWindow : Window
     {
         await OpenSettingsDialogAsync();
     }
+
+    // カーソルキーでの回転補正(#133)。Slider の既定処理が StepFrequency(0.1 度)を適用済みなので、
+    // 加速したぶんの差だけを足す。押しっぱなしのリピートで段階的に速くなる
+    private void OnRotationSliderKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (RotationKeyDirection(e.Key) is not { } direction
+            || StageViewModel.SelectedDisc is not { } disc)
+        {
+            return;
+        }
+
+        if (!e.KeyStatus.WasKeyDown)
+        {
+            _rotationKeyAccelerator.Reset();
+        }
+
+        double extraStep = _rotationKeyAccelerator.NextStep() - RotationKeyStepAccelerator.InitialStep;
+        if (extraStep > 0)
+        {
+            disc.RotationAngle += direction * extraStep;
+        }
+    }
+
+    private void OnRotationSliderKeyUp(object sender, KeyRoutedEventArgs e)
+    {
+        if (RotationKeyDirection(e.Key) is not null)
+        {
+            _rotationKeyAccelerator.Reset();
+        }
+    }
+
+    // 縦 Slider の既定と同じ割り当て(上・右で増加、下・左で減少)
+    private static int? RotationKeyDirection(VirtualKey key) => key switch
+    {
+        VirtualKey.Up or VirtualKey.Right => 1,
+        VirtualKey.Down or VirtualKey.Left => -1,
+        _ => null,
+    };
 
     private async void OnReprocessSheetsButtonClick(object sender, RoutedEventArgs e)
     {

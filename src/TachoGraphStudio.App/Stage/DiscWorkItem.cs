@@ -33,7 +33,11 @@ public sealed partial class DiscWorkItem : ObservableObject
                 return;
             }
 
-            SetProperty(ref _rotationAngle, Math.Clamp(value, -180.0, 180.0));
+            // UI の刻みは 0.1 度。0.1 は二進で表現できないため、カーソルキーの加算では
+            // 0.3000000045 のような値が角度欄に出てしまう。保持時に刻みへ丸める(#133)
+            SetProperty(
+                ref _rotationAngle,
+                Math.Round(Math.Clamp(value, -180.0, 180.0), 1, MidpointRounding.AwayFromZero));
         }
     }
 
