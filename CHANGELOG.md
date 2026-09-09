@@ -8,6 +8,7 @@
 
 ### Changed
 
+- App: アプリ状態の復元ルール（出力先の存在確認・出力 DPI の選択肢判定・範囲外の画像処理設定の握り潰し）を `MainWindow.xaml.cs` から `StageViewModel.RestoreFrom` へ、サイドバー幅の判定を `AppStateRestore.ResolveSidebarWidth` へ切り出し、テストを追加した。動作は従来と同じ（#137）
 - App: ウィンドウ配置の復元先の算出（保存値の妥当性判定と作業領域へのクランプ）を `MainWindow.xaml.cs` から `WindowPlacementTracker.ResolveRestoreBounds` へ切り出し、テストを追加した。作業領域の解決（WinUI の `DisplayArea`）は呼び出し側に残す。動作は従来と同じ（#137）
 
 ## [0.3.0] - 2026-09-09

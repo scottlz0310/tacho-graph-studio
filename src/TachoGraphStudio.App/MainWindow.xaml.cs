@@ -258,39 +258,14 @@ public sealed partial class MainWindow : Window
         }
 
         _lastShownVersion = state.LastShownVersion;
+        StageViewModel.RestoreFrom(state, Directory.Exists);
 
-        if (state.OutputDirectory is { } outputDirectory && Directory.Exists(outputDirectory))
+        if (AppStateRestore.ResolveSidebarWidth(
+                state.SidebarWidth,
+                SidebarColumn.MinWidth,
+                SidebarColumn.MaxWidth) is { } sidebarWidth)
         {
-            StageViewModel.OutputDirectory = outputDirectory;
-        }
-
-        if (state.LastTargetDate is { } lastTargetDate)
-        {
-            StageViewModel.TargetDate = lastTargetDate;
-        }
-
-        if (state.ExportDpi is { } exportDpi
-            && StageViewModel.ExportDpiOptions.Contains(exportDpi))
-        {
-            StageViewModel.ExportDpi = exportDpi;
-        }
-
-        if (state.ImageProcessing is { } imageProcessing)
-        {
-            try
-            {
-                StageViewModel.ProcessingSettings = imageProcessing;
-            }
-            catch (ArgumentException)
-            {
-                // 手動編集などで範囲外になった項目は適用せず、既定値で安全に起動する
-            }
-        }
-
-        if (state.SidebarWidth is { } sidebarWidth && double.IsFinite(sidebarWidth))
-        {
-            SidebarColumn.Width = new GridLength(
-                Math.Clamp(sidebarWidth, SidebarColumn.MinWidth, SidebarColumn.MaxWidth));
+            SidebarColumn.Width = new GridLength(sidebarWidth);
         }
 
         ApplyWindowPlacement(state.Window);
