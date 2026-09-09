@@ -12,7 +12,9 @@ namespace TachoGraphStudio.App.Settings;
 // 重ねて描く(#126)。検出は本処理と同じ SheetSplitter / ImageProcessingOptionsResolver を通す
 public sealed class SheetDetectionPreviewRenderer : IDetectionPreviewRenderer
 {
-    public const int DefaultMaxLongSide = 640;
+    // 設定画面の幅いっぱいに表示しても等倍を超えない解像度。検出コスト(SheetSplitter.Split)は
+    // この値に依存せず、増えるのは縮小とオーバーレイ描画だけなので引き上げは安価
+    public const int DefaultMaxLongSide = 1280;
 
     // BGRA。切り出し範囲・アルファ円・中心をそれぞれ区別できる色にする
     private static readonly Scalar CropRegionColor = new(0, 138, 255, 255);
