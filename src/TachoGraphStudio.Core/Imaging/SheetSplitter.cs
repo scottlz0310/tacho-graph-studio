@@ -138,6 +138,28 @@ public sealed class SheetSplitter
         return discs;
     }
 
+    // 切り出した画素を必要としない用途(設定画面の検出プレビュー、#126)向けに、
+    // 検出結果の幾何情報だけを返す。判定を分岐させるとプレビューと本処理で
+    // 結果がずれるため、Split をそのまま実行して画素だけを捨てる
+    public IReadOnlyList<DiscDetection> Detect(SheetImage sheet, DiscSplitOptions? options = null)
+    {
+        IReadOnlyList<DiscImage> discs = Split(sheet, options);
+        try
+        {
+            return [.. discs.Select(disc => new DiscDetection(
+                disc.RegionInSheet,
+                disc.DiscCenter,
+                disc.DiscDiameter))];
+        }
+        finally
+        {
+            foreach (DiscImage disc in discs)
+            {
+                disc.Dispose();
+            }
+        }
+    }
+
     private static Mat DecodeSheet(SheetImage sheet)
     {
         Mat pixels = Cv2.ImDecode(sheet.ImageBytes, ImreadModes.Color);

@@ -26,7 +26,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Padding="4,12,4,4" Spacing="12">
                     <TextBlock
-                        Text="スキャナやチャート紙に合わせて円盤の検出・切り出しを調整します。変更後はシートを再処理してください。"
+                        Text="スキャナやチャート紙に合わせて円盤の検出・切り出しを調整します。検出プレビューで結果を確認し、取込済みのシートへ反映するには保存後に「再処理」を実行してください。"
                         TextWrapping="Wrap" />
                     <Grid ColumnDefinitions="*,160" ColumnSpacing="16">
                         <StackPanel Spacing="4">
@@ -49,7 +49,8 @@
                             Maximum="255"
                             SmallChange="1"
                             SpinButtonPlacementMode="Inline"
-                            ValidationMode="InvalidInputOverwritten" />
+                            ValidationMode="InvalidInputOverwritten"
+                            ValueChanged="OnImageProcessingValueChanged" />
                     </Grid>
                     <NumberBox
                         x:Name="PaddingNumberBox"
@@ -61,7 +62,8 @@
                         Maximum="2147483647"
                         SmallChange="1"
                         SpinButtonPlacementMode="Inline"
-                        ValidationMode="InvalidInputOverwritten" />
+                        ValidationMode="InvalidInputOverwritten"
+                        ValueChanged="OnImageProcessingValueChanged" />
                     <NumberBox
                         x:Name="EllipsePaddingNumberBox"
                         MinWidth="200"
@@ -72,11 +74,54 @@
                         Maximum="2147483647"
                         SmallChange="1"
                         SpinButtonPlacementMode="Inline"
-                        ValidationMode="InvalidInputOverwritten" />
+                        ValidationMode="InvalidInputOverwritten"
+                        ValueChanged="OnImageProcessingValueChanged" />
                     <Button
                         HorizontalAlignment="Left"
                         Click="OnRestoreImageProcessingDefaultsButtonClick"
                         Content="既定値に戻す" />
+                    <!-- 検出プレビュー(#126)。直近に取り込んだシートを縮小し、現在の設定での
+                         切り出し範囲・アルファ円・中心を重ねて表示する -->
+                    <TextBlock Style="{ThemeResource BodyStrongTextBlockStyle}" Text="検出プレビュー" />
+                    <TextBlock
+                        x:Name="PreviewUnavailableTextBlock"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="直近に取り込んだシートがありません。シートを取り込むと、この設定での検出結果を確認できます。"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+                    <StackPanel
+                        x:Name="PreviewPanel"
+                        Spacing="8"
+                        Visibility="Collapsed">
+                        <Border
+                            MinHeight="200"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                            <Grid Padding="8">
+                                <Image
+                                    MaxHeight="360"
+                                    Source="{x:Bind ImageProcessingPreview.PreviewImage, Mode=OneWay}"
+                                    Stretch="Uniform" />
+                                <ProgressRing
+                                    Width="32"
+                                    Height="32"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    IsActive="{x:Bind ImageProcessingPreview.IsRunning, Mode=OneWay}"
+                                    Visibility="{x:Bind ImageProcessingPreview.IsRunning, Mode=OneWay}" />
+                            </Grid>
+                        </Border>
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind ImageProcessingPreview.StatusMessage, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="オレンジ: 切り出し範囲 / 緑: アルファ円 / 赤: 中心"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </TabViewItem>
