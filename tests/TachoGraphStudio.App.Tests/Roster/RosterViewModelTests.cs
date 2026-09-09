@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
 
@@ -279,6 +280,81 @@ public sealed class RosterViewModelTests
         Assert.Equal(2, viewModel.Entries.Count);
         VendorOption option = Assert.Single(viewModel.VendorOptions);
         Assert.Null(option.Code);
+    }
+
+    // 管理番号ジャンプ(FR-12)。呼び出し側が表示位置を合わせるための行番号を返す(#137)
+    [Theory]
+    [InlineData("101", 0)]
+    [InlineData("202", 1)]
+    [InlineData("303", 2)]
+    public async Task JumpToControlNumber_SelectsMatchAndReturnsItsRow(string jumpText, int expectedRow)
+    {
+        RosterViewModel viewModel = await CreateLoadedViewModelAsync(101, 202, 303);
+        viewModel.ControlNumberJumpText = jumpText;
+
+        int? row = viewModel.JumpToControlNumber();
+
+        Assert.Equal(expectedRow, row);
+        Assert.Equal(long.Parse(jumpText, CultureInfo.InvariantCulture), viewModel.SelectedEntry?.ControlNumber);
+    }
+
+    // 前方一致で拾う
+    [Fact]
+    public async Task JumpToControlNumber_MatchesByPrefix()
+    {
+        RosterViewModel viewModel = await CreateLoadedViewModelAsync(101, 202, 303);
+        viewModel.ControlNumberJumpText = "20";
+
+        Assert.Equal(1, viewModel.JumpToControlNumber());
+        Assert.Equal(202, viewModel.SelectedEntry?.ControlNumber);
+    }
+
+    // 一致しない場合は選択を変えない。直前の選択があればその行が返り、
+    // 呼び出し側は現在の選択位置へ表示を合わせ直す(切り出し前と同じ動作)
+    [Fact]
+    public async Task JumpToControlNumber_WithoutMatchKeepsSelectionAndReturnsItsRow()
+    {
+        RosterViewModel viewModel = await CreateLoadedViewModelAsync(101, 202, 303);
+        viewModel.ControlNumberJumpText = "202";
+        viewModel.JumpToControlNumber();
+
+        viewModel.ControlNumberJumpText = "999";
+        int? row = viewModel.JumpToControlNumber();
+
+        Assert.Equal(1, row);
+        Assert.Equal(202, viewModel.SelectedEntry?.ControlNumber);
+    }
+
+    // 選択が無ければ表示を動かさない
+    [Fact]
+    public async Task JumpToControlNumber_WithoutMatchAndWithoutSelectionReturnsNull()
+    {
+        RosterViewModel viewModel = await CreateLoadedViewModelAsync(101, 202, 303);
+        viewModel.ControlNumberJumpText = "999";
+
+        Assert.Null(viewModel.JumpToControlNumber());
+        Assert.Null(viewModel.SelectedEntry);
+    }
+
+    [Fact]
+    public void JumpToControlNumber_WithoutEntriesReturnsNull()
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore())
+        {
+            ControlNumberJumpText = "101",
+        };
+
+        Assert.Null(viewModel.JumpToControlNumber());
+    }
+
+    private static async Task<RosterViewModel> CreateLoadedViewModelAsync(params long[] controlNumbers)
+    {
+        RosterViewModel viewModel = new(new NullFilterSettingsStore());
+        viewModel.SetRosterClient(
+            new StubRosterClient(CreateRosterResult(controlNumbers)),
+            new StubVendorClient(CreateVendorResult()));
+        await viewModel.RefreshAsync();
+        return viewModel;
     }
 
     private static RosterResult CreateRosterResult(params long[] controlNumbers)

@@ -230,13 +230,27 @@ public sealed partial class RosterViewModel : ObservableObject
         }
     }
 
-    public void JumpToControlNumber()
+    /// <summary>
+    /// 管理番号ジャンプ(FR-12)。前方一致する行があれば選択する。
+    /// 併せて、呼び出し側が表示位置を合わせられるようジャンプ後の選択行番号を返す。
+    /// 一致しなかった場合は選択を変えないため、直前の選択行(あれば)がそのまま返る。
+    /// </summary>
+    /// <returns>選択行の 0 始まり番号。選択が無い場合は null。</returns>
+    public int? JumpToControlNumber()
     {
         RosterEntry? match = RosterFilter.FindByControlNumberPrefix(Entries, ControlNumberJumpText);
         if (match is not null)
         {
             SelectedEntry = match;
         }
+
+        if (SelectedEntry is not { } selected)
+        {
+            return null;
+        }
+
+        int index = Entries.IndexOf(selected);
+        return index >= 0 ? index : null;
     }
 
     private async Task RefreshVendorOptionsAsync(CancellationToken cancellationToken)
