@@ -4,7 +4,9 @@
 
 フォーマットは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に基づき、バージョニングは [Semantic Versioning](https://semver.org/spec/v2.0.0.html) に従う。
 
-## [Unreleased]
+## [0.3.1] - 2026-09-09
+
+利用者向けの機能変更を含まない保守リリース。`MainWindow.xaml.cs` に混在していた判断ロジック（ウィンドウ配置の復元、アプリ状態の保存・復元、更新後の変更点表示、名簿パネルの絞り込みとジャンプ）をテスト可能なクラスへ切り出し、テストを 88 件追加した。動作は v0.3.0 と同じ。
 
 ### Changed
 
