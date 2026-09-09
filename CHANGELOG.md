@@ -8,6 +8,7 @@
 
 ### Changed
 
+- App/Core: 更新後の変更点表示で「何もしない / 基準バージョンのみ記録 / 変更点を表示」を決める判断を `MainWindow.xaml.cs` から `UpdateNotesVersionPolicy.Plan` へ切り出し、記録用のバージョン整形も `UpdateNotesVersionPolicy.FormatVersion` へ集約した。変更履歴ファイルの読み込みは表示が必要なときだけに限定される。動作は従来と同じ（#137）
 - App: アプリ状態への書き出し（`StageViewModel.CaptureInto`）と、保存のきっかけにする対象プロパティの判定（`StageViewModel.IsPersistedProperty`）を `MainWindow.xaml.cs` から切り出し、両者が対応していることをテストで固定した。動作は従来と同じ（#137）
 - App: アプリ状態の復元ルール（出力先の存在確認・出力 DPI の選択肢判定・範囲外の画像処理設定の握り潰し）を `MainWindow.xaml.cs` から `StageViewModel.RestoreFrom` へ、サイドバー幅の判定を `AppStateRestore.ResolveSidebarWidth` へ切り出し、テストを追加した。動作は従来と同じ（#137）
 - App: ウィンドウ配置の復元先の算出（保存値の妥当性判定と作業領域へのクランプ）を `MainWindow.xaml.cs` から `WindowPlacementTracker.ResolveRestoreBounds` へ切り出し、テストを追加した。作業領域の解決（WinUI の `DisplayArea`）は呼び出し側に残す。動作は従来と同じ（#137）
