@@ -543,7 +543,7 @@ public sealed partial class MainWindow : Window
     private void OnSeasonComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (SeasonComboBox.SelectedItem is ComboBoxItem { Tag: string tag }
-            && Enum.TryParse(tag, out RosterSeason season))
+            && RosterSeasonTag.Parse(tag) is { } season)
         {
             RosterViewModel.Season = season;
         }
@@ -562,24 +562,16 @@ public sealed partial class MainWindow : Window
         }
 
         e.Handled = true;
-        RosterViewModel.JumpToControlNumber();
 
-        RosterEntry? selectedEntry = RosterViewModel.SelectedEntry;
-        if (selectedEntry is null)
+        if (RosterViewModel.JumpToControlNumber() is { } row)
         {
-            return;
-        }
-
-        int index = RosterViewModel.Entries.IndexOf(selectedEntry);
-        if (index >= 0)
-        {
-            await RosterDataGrid.ScrollRowIntoView(index);
+            await RosterDataGrid.ScrollRowIntoView(row);
         }
     }
 
     private void ApplyFilterSettingsToControls()
     {
-        string seasonTag = RosterViewModel.Season.ToString();
+        string seasonTag = RosterSeasonTag.From(RosterViewModel.Season);
         foreach (object item in SeasonComboBox.Items)
         {
             if (item is ComboBoxItem { Tag: string itemTag } comboBoxItem
