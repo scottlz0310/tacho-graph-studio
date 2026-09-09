@@ -146,6 +146,9 @@ public sealed partial class StageViewModel : ObservableObject
 
     public bool CanReprocess => _lastImportedPaths.Count > 0 && !IsImporting;
 
+    // 設定画面の検出プレビュー(#126)が対象にする直近取込の先頭シート
+    public string? LastImportedSheetPath => _lastImportedPaths.Count > 0 ? _lastImportedPaths[0] : null;
+
     public bool HasImportError => ImportError is not null;
 
     public bool HasImportWarning => ImportWarning is not null;
@@ -497,6 +500,7 @@ public sealed partial class StageViewModel : ObservableObject
 
         _lastImportedPaths = [.. paths];
         OnPropertyChanged(nameof(CanReprocess));
+        OnPropertyChanged(nameof(LastImportedSheetPath));
 
         // 直近の選択(新規円盤の初期値、#43)は SelectedDisc = null で失われる前に退避する
         string? lastUsedTemplateId = SelectedTemplate?.Id;

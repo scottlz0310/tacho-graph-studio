@@ -37,6 +37,8 @@ public sealed partial class MainWindow : Window
     private readonly HttpClient _httpClient = new();
     private readonly ILoginVendorClient _loginVendorClient;
     private readonly ISecretStore _secretStore;
+    private readonly SheetLoader _sheetLoader;
+    private readonly IImageSourceFactory _imageSourceFactory = new WriteableBitmapImageSourceFactory();
     private readonly WindowPlacementTracker _windowPlacementTracker = new();
     private readonly TaskCompletionSource _initializationCompleted = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
@@ -79,9 +81,12 @@ public sealed partial class MainWindow : Window
 
         FileTemplateStore templateStore = new(Path.Combine(localFolderPath, "templates"));
 
+        // 検出プレビュー(#126)は本処理と同じ読込経路を通す必要があるため共有する
+        _sheetLoader = new SheetLoader(new WindowsPdfRasterizer(Program.GetSystemRasterizationScale));
+
         StageViewModel = new StageViewModel(
-            new StagePipeline(new SheetLoader(new WindowsPdfRasterizer(Program.GetSystemRasterizationScale))),
-            new WriteableBitmapImageSourceFactory(),
+            new StagePipeline(_sheetLoader),
+            _imageSourceFactory,
             templateStore);
 
         TemplateEditorViewModel = new TemplateEditorViewModel(templateStore);
@@ -668,6 +673,7 @@ public sealed partial class MainWindow : Window
             StageViewModel.ProcessingSettings,
             _credentialsValidator,
             _loginVendorClient,
+            CreateDetectionPreview(),
             selectSupabaseSection);
 
         // 設定ダイアログは独立した Window のため、hit test の抑止だけではタイトルバー(閉じる)が
@@ -707,6 +713,17 @@ public sealed partial class MainWindow : Window
 
         await RefreshSupabaseConnectionAsync(promptIfUnset: false);
     }
+
+    // 直近に取り込んだシートが無ければプレビューは提供しない(設定変更・保存は従来どおり)
+    private DetectionPreviewViewModel? CreateDetectionPreview()
+        => StageViewModel.LastImportedSheetPath is { } sheetPath
+            ? new DetectionPreviewViewModel(
+                new SheetDetectionPreviewRenderer(
+                    _sheetLoader,
+                    new ImageProcessingOptionsResolver(),
+                    sheetPath),
+                _imageSourceFactory)
+            : null;
 
     private async Task ShowSaveFailedDialogAsync()
     {

@@ -26,16 +26,21 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
     private readonly string? _pendingVendorCode;
     private bool _accepted;
     private bool _isShown;
+    // 構築中に走る ValueChanged では false のまま読まれる(代入はコンストラクタ末尾)
+    private readonly bool _isInitialized;
 
     public SupabaseSettingsDialog(
         SupabaseCredentials? existingCredentials,
         ImageProcessingSettings imageProcessingSettings,
         SupabaseCredentialsValidator credentialsValidator,
         ILoginVendorClient loginVendorClient,
+        DetectionPreviewViewModel? imageProcessingPreview = null,
         bool selectSupabaseSection = false)
     {
         ArgumentNullException.ThrowIfNull(imageProcessingSettings);
 
+        // x:Bind は InitializeComponent の中で初期評価されるため、バインド元は先に確定させる
+        ImageProcessingPreview = imageProcessingPreview;
         InitializeComponent();
         _existingCredentials = existingCredentials;
         _credentialsValidator = credentialsValidator;
@@ -47,6 +52,9 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
         PaddingNumberBox.Value = imageProcessingSettings.PaddingPx;
         EllipsePaddingNumberBox.Value = imageProcessingSettings.EllipsePaddingPx;
         SettingsTabView.SelectedIndex = selectSupabaseSection ? 1 : 0;
+        PreviewPanel.Visibility = imageProcessingPreview is null ? Visibility.Collapsed : Visibility.Visible;
+        PreviewUnavailableTextBlock.Visibility =
+            imageProcessingPreview is null ? Visibility.Visible : Visibility.Collapsed;
 
         if (existingCredentials is not null)
         {
@@ -55,11 +63,17 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
             _pendingVendorCode = existingCredentials.VendorCode;
             PasswordBox.Password = existingCredentials.Password;
         }
+
+        // 初期値の代入で走る ValueChanged をプレビュー要求として扱わないよう最後に立てる
+        _isInitialized = true;
     }
 
     public SupabaseCredentials? Result { get; private set; }
 
     public ImageProcessingSettings? ImageProcessingResult { get; private set; }
+
+    // 直近に取り込んだシートが無い場合は null。x:Bind は null のバインド元を許容する
+    public DetectionPreviewViewModel? ImageProcessingPreview { get; }
 
     /// <summary>設定ウィンドウを <paramref name="ownerHandle"/> の所有ウィンドウとして表示する。</summary>
     public Task<bool> ShowAsync(nint ownerHandle)
@@ -83,6 +97,8 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
     {
         RootGrid.Loaded -= OnLoaded;
 
+        await RefreshDetectionPreviewAsync();
+
         if (HasConnectionInputs())
         {
             await LoadVendorsAsync();
@@ -102,6 +118,24 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
     private void OnAnonKeyPasswordChanged(object sender, RoutedEventArgs args)
     {
         ClearLoadedVendors();
+    }
+
+    private async void OnImageProcessingValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        await RefreshDetectionPreviewAsync();
+    }
+
+    // 入力が不正な間はプレビューを更新しない。保存時に同じ検証でエラーを提示する
+    private Task RefreshDetectionPreviewAsync()
+    {
+        if (!_isInitialized
+            || ImageProcessingPreview is null
+            || !TryBuildImageProcessingSettings(out ImageProcessingSettings settings, out _))
+        {
+            return Task.CompletedTask;
+        }
+
+        return ImageProcessingPreview.RefreshAsync(settings);
     }
 
     private async void OnSaveButtonClick(object sender, RoutedEventArgs args)
@@ -188,10 +222,24 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
 
     private bool TryReadImageProcessingSettings(out ImageProcessingSettings settings)
     {
+        if (TryBuildImageProcessingSettings(out settings, out string? error))
+        {
+            return true;
+        }
+
+        ShowError(error);
+        return false;
+    }
+
+    // 保存時のエラー提示とプレビュー要求で同じ検証を使うため、表示は呼び出し側に委ねる
+    private bool TryBuildImageProcessingSettings(
+        out ImageProcessingSettings settings,
+        out string error)
+    {
         settings = ImageProcessingSettings.Default;
-        if (!TryReadInteger(ThresholdNumberBox, "前景判定しきい値", out int threshold)
-            || !TryReadInteger(PaddingNumberBox, "切り出し余白", out int paddingPx)
-            || !TryReadInteger(EllipsePaddingNumberBox, "アルファ円マージン", out int ellipsePaddingPx))
+        if (!TryReadInteger(ThresholdNumberBox, "前景判定しきい値", out int threshold, out error)
+            || !TryReadInteger(PaddingNumberBox, "切り出し余白", out int paddingPx, out error)
+            || !TryReadInteger(EllipsePaddingNumberBox, "アルファ円マージン", out int ellipsePaddingPx, out error))
         {
             return false;
         }
@@ -209,15 +257,16 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
         }
         catch (ArgumentException exception)
         {
-            ShowError(exception.Message);
+            error = exception.Message;
             return false;
         }
 
         settings = candidate;
+        error = string.Empty;
         return true;
     }
 
-    private bool TryReadInteger(NumberBox numberBox, string label, out int value)
+    private static bool TryReadInteger(NumberBox numberBox, string label, out int value, out string error)
     {
         double input = numberBox.Value;
         if (!double.IsFinite(input)
@@ -225,11 +274,12 @@ public sealed partial class SupabaseSettingsDialog : WindowEx
             || input < int.MinValue
             || input > int.MaxValue)
         {
-            ShowError($"{label}は整数で指定してください。");
+            error = $"{label}は整数で指定してください。";
             value = default;
             return false;
         }
 
+        error = string.Empty;
         value = (int)input;
         return true;
     }

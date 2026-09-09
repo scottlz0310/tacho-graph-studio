@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 
 using OpenCvSharp;
 
-using TachoGraphStudio.App.Imaging;
 using TachoGraphStudio.Core.Imaging;
 using TachoGraphStudio.Core.Settings;
 
@@ -17,9 +16,7 @@ public sealed class StagePipeline : IStagePipeline
     private readonly SheetLoader _sheetLoader;
     private readonly SheetSplitter _splitter = new();
     private readonly IBackgroundRemover _remover;
-    private readonly DiscSplitOptions _pdfSplitOptions;
-    private readonly DiscSplitOptions _imageSplitOptions;
-    private readonly BackgroundRemovalOptions _removalOptions;
+    private readonly ImageProcessingOptionsResolver _optionsResolver;
 
     public StagePipeline(
         SheetLoader sheetLoader,
@@ -32,11 +29,10 @@ public sealed class StagePipeline : IStagePipeline
 
         _sheetLoader = sheetLoader;
         _remover = remover ?? new BackgroundRemover();
-        // PDF は WindowsPdfRasterizer のレンダリング DPI が既知。JPEG は DPI 不明のまま
-        // SheetSplitter のフォールバック最小サイズに任せる
-        _pdfSplitOptions = pdfSplitOptions ?? new DiscSplitOptions { Dpi = WindowsPdfRasterizer.DefaultDpi };
-        _imageSplitOptions = imageSplitOptions ?? new DiscSplitOptions();
-        _removalOptions = removalOptions ?? new BackgroundRemovalOptions();
+        _optionsResolver = new ImageProcessingOptionsResolver(
+            pdfSplitOptions,
+            imageSplitOptions,
+            removalOptions);
     }
 
     public async IAsyncEnumerable<ProcessedDisc> ProcessAsync(
@@ -45,34 +41,11 @@ public sealed class StagePipeline : IStagePipeline
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        DiscSplitOptions pdfSplitOptions = _pdfSplitOptions;
-        DiscSplitOptions imageSplitOptions = _imageSplitOptions;
-        BackgroundRemovalOptions removalOptions = _removalOptions;
-        if (settings is not null)
-        {
-            settings.Validate();
-            pdfSplitOptions = pdfSplitOptions with
-            {
-                Threshold = settings.Threshold,
-                PaddingPx = settings.PaddingPx,
-            };
-            imageSplitOptions = imageSplitOptions with
-            {
-                Threshold = settings.Threshold,
-                PaddingPx = settings.PaddingPx,
-            };
-            removalOptions = removalOptions with
-            {
-                EllipsePaddingPx = settings.EllipsePaddingPx,
-            };
-        }
+        BackgroundRemovalOptions removalOptions = _optionsResolver.ResolveRemovalOptions(settings);
 
         await foreach (SheetImage sheet in _sheetLoader.LoadAsync(paths, cancellationToken))
         {
-            DiscSplitOptions splitOptions =
-                Path.GetExtension(sheet.SourcePath).Equals(".pdf", StringComparison.OrdinalIgnoreCase)
-                    ? pdfSplitOptions
-                    : imageSplitOptions;
+            DiscSplitOptions splitOptions = _optionsResolver.ResolveSplitOptions(sheet.SourcePath, settings);
 
             // 円盤単位で逐次 yield し、後続円盤の失敗時も変換済みの円盤は呼び出し元へ届いた状態にする
             IReadOnlyList<DiscImage> discs = await Task.Run(

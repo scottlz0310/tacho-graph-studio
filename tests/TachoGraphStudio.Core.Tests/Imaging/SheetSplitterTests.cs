@@ -655,6 +655,53 @@ public sealed class SheetSplitterTests
         Assert.Contains(expectedInMessage, exception.Message);
     }
 
+    // 検出プレビュー(#126)は Detect の幾何情報だけで表示する。Split と結果が
+    // ずれるとプレビューと再処理が食い違うため、同一であることを固定する
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void Detect_ReturnsSameGeometryAsSplit(int discCount)
+    {
+        (int X, int Y)[] centers = [.. Enumerable.Range(0, discCount)
+            .Select(index => (150 + (index % 3) * 300, 150 + (index / 3) * 300))];
+        SheetImage sheet = BuildSheet(1000, 700, [.. centers.Select(center => (center.X, center.Y, StandardRadius))]);
+        DiscSplitOptions options = new() { Dpi = TestDpi };
+        SheetSplitter splitter = new();
+
+        IReadOnlyList<DiscDetection> detections = splitter.Detect(sheet, options);
+
+        List<DiscImage> discs = [.. splitter.Split(sheet, options)];
+        try
+        {
+            Assert.Equal(discs.Count, detections.Count);
+            for (int index = 0; index < discs.Count; index++)
+            {
+                Assert.Equal(discs[index].RegionInSheet, detections[index].CropRegionInSheet);
+                Assert.Equal(discs[index].DiscCenter, detections[index].CenterInCrop);
+                Assert.Equal(discs[index].DiscDiameter, detections[index].Diameter);
+                Assert.Equal(
+                    discs[index].DiscCenter.X + discs[index].RegionInSheet.X,
+                    detections[index].CenterInSheet.X);
+                Assert.Equal(
+                    discs[index].DiscCenter.Y + discs[index].RegionInSheet.Y,
+                    detections[index].CenterInSheet.Y);
+            }
+        }
+        finally
+        {
+            discs.ForEach(disc => disc.Dispose());
+        }
+    }
+
+    [Fact]
+    public void Detect_ThrowsWhenThresholdExcludesEveryDisc()
+    {
+        SheetImage sheet = BuildSheet(1000, 700, [(150, 150, StandardRadius)]);
+
+        Assert.Throws<DiscSplitException>(
+            () => new SheetSplitter().Detect(sheet, new DiscSplitOptions { Dpi = TestDpi, Threshold = 255 }));
+    }
+
     private static SheetImage BuildSheet(
         int width,
         int height,

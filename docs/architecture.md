@@ -73,6 +73,8 @@ Load(PDF/JPEG) → Split(円盤検出・分割) → RemoveBackground(楕円フ�
 - 中間成果物は円盤単位のワークアイテムとして保持し、サムネイルナビ（No.1〜6）・処理ステータス（未処理/処理済み/スキップ）に対応させる
 - プレビューのリアルタイム追従（FR-07, FR-18）は UI 側の合成で実現し、確定保存時のみ Core でフル解像度の本合成を行う。600dpi 級での実用速度（NFR-03）はこの分離で担保する
 - PDF 読込は `Windows.Data.Pdf`（OS 標準）を第一選択とする。WinRT API のため読込アダプタは App 側実装とし、Core は画像バイト列を受ける
+- 画像処理設定（FR-03）から `DiscSplitOptions` / `BackgroundRemovalOptions` への解決は `ImageProcessingOptionsResolver`（App）へ集約し、本処理と設定画面の検出プレビューが同じ入力・設定で同じ結果になるようにする（#126）
+- 設定画面の検出プレビューは `SheetSplitter.Detect`（`Split` の幾何情報のみを返す）と `DiscAlphaCircle`（本処理と共有するアルファ円）を通す。プレビュー専用の判定分岐は持たない（#126）
 
 ### 3.2 名簿連携（Core.Roster）
 
