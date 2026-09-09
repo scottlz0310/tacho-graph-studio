@@ -186,6 +186,44 @@ public sealed partial class StageViewModel : ObservableObject
         }
     }
 
+    // 保存済みアプリ状態(FR-22)の復元。状態ファイルは手動編集や旧バージョンの書き込みで
+    // 壊れうるため、項目ごとに利用できる値かを判定し、駄目な項目だけ既定値のままにする(#137)。
+    // 出力先の存在確認はファイルシステムに依存するため、判定を関数で受け取る
+    public void RestoreFrom(AppState state, Func<string, bool> directoryExists)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(directoryExists);
+
+        // 保存後に削除・移動された出力先は復元しない(保存時に初めて失敗するのを避ける)
+        if (state.OutputDirectory is { } outputDirectory && directoryExists(outputDirectory))
+        {
+            OutputDirectory = outputDirectory;
+        }
+
+        if (state.LastTargetDate is { } lastTargetDate)
+        {
+            TargetDate = lastTargetDate;
+        }
+
+        // 選択肢から外れた DPI(旧バージョンの値など)は setter が例外にするため事前に弾く
+        if (state.ExportDpi is { } exportDpi && ExportDpiOptions.Contains(exportDpi))
+        {
+            ExportDpi = exportDpi;
+        }
+
+        if (state.ImageProcessing is { } imageProcessing)
+        {
+            try
+            {
+                ProcessingSettings = imageProcessing;
+            }
+            catch (ArgumentException)
+            {
+                // 手動編集などで範囲外になった項目は適用せず、既定値で安全に起動する
+            }
+        }
+    }
+
     public void ResetRotation()
     {
         if (SelectedDisc is not null)

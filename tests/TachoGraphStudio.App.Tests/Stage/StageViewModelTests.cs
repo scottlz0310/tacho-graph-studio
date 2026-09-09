@@ -33,6 +33,106 @@ public sealed class StageViewModelTests : IDisposable
         new FakeTemplateStore(),
         new DateOnly(2026, 7, 19));
 
+    // 保存済みアプリ状態の復元(#137)。状態ファイルは壊れうるため項目ごとに判定する
+    [Fact]
+    public void RestoreFrom_AppliesEverySavedValue()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        AppState state = new()
+        {
+            OutputDirectory = @"C:\output",
+            LastTargetDate = new DateOnly(2026, 8, 1),
+            ExportDpi = 300,
+            ImageProcessing = new ImageProcessingSettings { Threshold = 12, PaddingPx = 30 },
+        };
+
+        viewModel.RestoreFrom(state, _ => true);
+
+        Assert.Equal(@"C:\output", viewModel.OutputDirectory);
+        Assert.Equal(new DateOnly(2026, 8, 1), viewModel.TargetDate);
+        Assert.Equal(300, viewModel.ExportDpi);
+        Assert.Equal(12, viewModel.ProcessingSettings.Threshold);
+        Assert.Equal(30, viewModel.ProcessingSettings.PaddingPx);
+    }
+
+    // 未保存の項目は既定値のままにする(部分的に保存された旧状態ファイルとの互換)
+    [Fact]
+    public void RestoreFrom_WithEmptyStateKeepsDefaults()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        int defaultDpi = viewModel.ExportDpi;
+        DateOnly defaultDate = viewModel.TargetDate;
+
+        viewModel.RestoreFrom(new AppState(), _ => true);
+
+        Assert.Null(viewModel.OutputDirectory);
+        Assert.Equal(defaultDpi, viewModel.ExportDpi);
+        Assert.Equal(defaultDate, viewModel.TargetDate);
+        Assert.Equal(ImageProcessingSettings.Default, viewModel.ProcessingSettings);
+    }
+
+    // 保存後に削除・移動された出力先は復元しない(保存時に初めて失敗するのを避ける)
+    [Fact]
+    public void RestoreFrom_SkipsOutputDirectoryThatNoLongerExists()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        List<string> probed = [];
+
+        viewModel.RestoreFrom(
+            new AppState { OutputDirectory = @"D:\removed" },
+            path =>
+            {
+                probed.Add(path);
+                return false;
+            });
+
+        Assert.Null(viewModel.OutputDirectory);
+        Assert.Equal([@"D:\removed"], probed);
+    }
+
+    // 選択肢から外れた DPI は setter が例外にするため、復元側で弾く
+    [Theory]
+    [InlineData(0)]
+    [InlineData(150)]
+    [InlineData(1200)]
+    [InlineData(-600)]
+    public void RestoreFrom_SkipsUnsupportedExportDpi(int savedDpi)
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        int defaultDpi = viewModel.ExportDpi;
+
+        viewModel.RestoreFrom(new AppState { ExportDpi = savedDpi }, _ => true);
+
+        Assert.Equal(defaultDpi, viewModel.ExportDpi);
+    }
+
+    // 手動編集などで範囲外になった画像処理設定は適用せず、既定値で起動する
+    [Theory]
+    [InlineData(0)]
+    [InlineData(256)]
+    [InlineData(-1)]
+    public void RestoreFrom_SkipsOutOfRangeImageProcessing(int savedThreshold)
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+        AppState state = new()
+        {
+            ImageProcessing = new ImageProcessingSettings { Threshold = savedThreshold },
+        };
+
+        viewModel.RestoreFrom(state, _ => true);
+
+        Assert.Equal(ImageProcessingSettings.Default, viewModel.ProcessingSettings);
+    }
+
+    [Fact]
+    public void RestoreFrom_WithoutArgumentsThrows()
+    {
+        StageViewModel viewModel = CreateViewModel(new FakeStagePipeline());
+
+        Assert.Throws<ArgumentNullException>(() => viewModel.RestoreFrom(null!, _ => true));
+        Assert.Throws<ArgumentNullException>(() => viewModel.RestoreFrom(new AppState(), null!));
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(3)]
