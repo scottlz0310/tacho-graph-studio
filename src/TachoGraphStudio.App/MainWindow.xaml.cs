@@ -530,6 +530,12 @@ public sealed partial class MainWindow : Window
         await OpenSettingsDialogAsync();
     }
 
+    // 名簿パネルの未接続導線から開く場合は、解消すべき設定のあるタブを直接開く
+    private async void OnOpenSupabaseSettingsButtonClick(object sender, RoutedEventArgs e)
+    {
+        await OpenSettingsDialogAsync(selectSupabaseSection: true);
+    }
+
     // カーソルキーでの回転補正(#133)。Slider の既定処理に上乗せする角度は
     // RotationKeyStepCalculator が決める
     private void OnRotationSliderKeyDown(object sender, KeyRoutedEventArgs e)

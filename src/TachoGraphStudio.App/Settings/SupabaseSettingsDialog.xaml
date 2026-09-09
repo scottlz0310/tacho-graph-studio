@@ -5,7 +5,7 @@
     xmlns:winuiex="using:WinUIEx"
     Title="設定"
     Width="680"
-    Height="720"
+    Height="1000"
     MinWidth="560"
     MinHeight="520"
     IsMaximizable="True"
@@ -52,30 +52,30 @@
                             ValidationMode="InvalidInputOverwritten"
                             ValueChanged="OnImageProcessingValueChanged" />
                     </Grid>
-                    <NumberBox
-                        x:Name="PaddingNumberBox"
-                        MinWidth="200"
-                        HorizontalAlignment="Left"
-                        Header="切り出し余白 (px)"
-                        Description="入力 DPI が不明な JPEG で、検出領域の周囲に付加する余白です。"
-                        Minimum="0"
-                        Maximum="2147483647"
-                        SmallChange="1"
-                        SpinButtonPlacementMode="Inline"
-                        ValidationMode="InvalidInputOverwritten"
-                        ValueChanged="OnImageProcessingValueChanged" />
-                    <NumberBox
-                        x:Name="EllipsePaddingNumberBox"
-                        MinWidth="200"
-                        HorizontalAlignment="Left"
-                        Header="アルファ円マージン (px)"
-                        Description="正で円盤の縁を残し、負で内側へ絞ります。"
-                        Minimum="-2147483648"
-                        Maximum="2147483647"
-                        SmallChange="1"
-                        SpinButtonPlacementMode="Inline"
-                        ValidationMode="InvalidInputOverwritten"
-                        ValueChanged="OnImageProcessingValueChanged" />
+                    <!-- 縦を検出プレビューへ回すため、幅に余裕のある 2 つの数値入力は横に並べる -->
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                        <NumberBox
+                            x:Name="PaddingNumberBox"
+                            Header="切り出し余白 (px)"
+                            Description="入力 DPI が不明な JPEG で、検出領域の周囲に付加する余白です。"
+                            Minimum="0"
+                            Maximum="2147483647"
+                            SmallChange="1"
+                            SpinButtonPlacementMode="Inline"
+                            ValidationMode="InvalidInputOverwritten"
+                            ValueChanged="OnImageProcessingValueChanged" />
+                        <NumberBox
+                            x:Name="EllipsePaddingNumberBox"
+                            Grid.Column="1"
+                            Header="アルファ円マージン (px)"
+                            Description="正で円盤の縁を残し、負で内側へ絞ります。"
+                            Minimum="-2147483648"
+                            Maximum="2147483647"
+                            SmallChange="1"
+                            SpinButtonPlacementMode="Inline"
+                            ValidationMode="InvalidInputOverwritten"
+                            ValueChanged="OnImageProcessingValueChanged" />
+                    </Grid>
                     <Button
                         HorizontalAlignment="Left"
                         Click="OnRestoreImageProcessingDefaultsButtonClick"
@@ -100,8 +100,12 @@
                             BorderThickness="1"
                             CornerRadius="4">
                             <Grid Padding="8">
+                                <!-- 幅に追従して拡大する。上限は描画解像度
+                                     (SheetDetectionPreviewRenderer.DefaultMaxLongSide) に合わせ、
+                                     等倍を超える引き伸ばしでぼけないようにする -->
                                 <Image
-                                    MaxHeight="360"
+                                    MaxWidth="1280"
+                                    MaxHeight="1280"
                                     Source="{x:Bind ImageProcessingPreview.PreviewImage, Mode=OneWay}"
                                     Stretch="Uniform" />
                                 <ProgressRing
