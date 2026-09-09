@@ -296,29 +296,23 @@ public sealed partial class MainWindow : Window
         ApplyWindowPlacement(state.Window);
     }
 
+    // 復元先の算出(保存値の妥当性判定と作業領域へのクランプ)は WindowPlacementTracker が担う。
+    // ここは最寄りディスプレイの作業領域を渡し、結果をウィンドウへ適用するだけ
     private void ApplyWindowPlacement(WindowPlacement? placement)
     {
-        if (placement is not { Width: > 0, Height: > 0 })
+        if (WindowPlacementTracker.ResolveRestoreBounds(
+                placement,
+                saved => Microsoft.UI.Windowing.DisplayArea
+                    .GetFromRect(saved, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest)
+                    .WorkArea) is not { } bounds)
         {
             return;
         }
 
-        Windows.Graphics.RectInt32 bounds = new(
-            placement.X, placement.Y, placement.Width, placement.Height);
+        AppWindow.MoveAndResize(bounds);
+        _windowPlacementTracker.Seed(bounds);
 
-        // モニタ構成の変更で画面外に復元されないよう、最寄りディスプレイの作業領域へ収める
-        Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea
-            .GetFromRect(bounds, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
-        Windows.Graphics.RectInt32 workArea = displayArea.WorkArea;
-        int width = Math.Min(bounds.Width, workArea.Width);
-        int height = Math.Min(bounds.Height, workArea.Height);
-        int x = Math.Clamp(bounds.X, workArea.X, workArea.X + workArea.Width - width);
-        int y = Math.Clamp(bounds.Y, workArea.Y, workArea.Y + workArea.Height - height);
-
-        AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
-        _windowPlacementTracker.Seed(new Windows.Graphics.RectInt32(x, y, width, height));
-
-        if (placement.IsMaximized
+        if (placement is { IsMaximized: true }
             && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
         {
             presenter.Maximize();
