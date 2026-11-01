@@ -4,6 +4,12 @@
 
 フォーマットは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に基づき、バージョニングは [Semantic Versioning](https://semver.org/spec/v2.0.0.html) に従う。
 
+## [Unreleased]
+
+### Changed
+
+- CI: リリースを release-automate 経由に移行した。手動の Prepare Release が `chore(release): vX.Y.Z` の準備 PR（CHANGELOG の確定）を作り、そのマージで release.yml が draft の Release とタグを作成する。MSIX のビルド・署名、成果物の添付、Release からの再取得による SHA-256 照合を経て、Release を公開する。タグの手動 push による発行は廃止した。CHANGELOG には release-automate が要求する `## [Unreleased]` 見出しと比較リンクを追加した（#164）
+
 ## [0.3.1] - 2026-09-09
 
 利用者向けの機能変更を含まない保守リリース。`MainWindow.xaml.cs` に混在していた判断ロジック（ウィンドウ配置の復元、アプリ状態の保存・復元、更新後の変更点表示、名簿パネルの絞り込みとジャンプ）をテスト可能なクラスへ切り出し、テストを 88 件追加した。動作は v0.3.0 と同じ。
@@ -240,3 +246,5 @@ Phase 1〜4（プロジェクト骨格・MSIX 配布・名簿連携・画像処�
 - インストールスクリプトに UAC 自己昇格を追加（非管理者ターミナルからの実行に対応）
 - `AtomicJsonFile<TDocument>` を `Core.Roster` から `Core.Persistence` へ移動し public 化（App 側の `ISecretStore` 実装からも再利用するため）
 - App: Supabase 未設定・無効時の導線をトップレベル `InfoBar` から名簿サイドバー内の表示に統合(アーキテクチャ §3.3 の方針どおり、名簿パネル実装後は同パネル内の導線に一本化)
+
+[Unreleased]: https://github.com/scottlz0310/tacho-graph-studio/compare/v0.3.1...HEAD
