@@ -57,7 +57,9 @@ pwsh -File .\scripts\Reset-TachoGraphStudioState.ps1 -Scope Secrets, Cache   # �
 ### リリース
 
 1. 初回のみ: `scripts/New-SigningCertificate.ps1` で署名証明書を生成し、出力される値を GitHub Secrets（`SIGNING_CERTIFICATE_BASE64` / `SIGNING_CERTIFICATE_PASSWORD`）に登録する
-2. CHANGELOG を更新し、`v<major>.<minor>.<patch>` タグを push する。Release ワークフローが署名済み MSIX・`.appinstaller`・公開証明書・インストールスクリプトを GitHub Releases に発行する
+2. 変更は CHANGELOG の `## [Unreleased]` に記録しておく
+3. Actions の **Prepare Release** を手動で起動し、リリースする版（例: `0.3.2`）を指定する。`[Unreleased]` を確定した準備 PR（`chore(release): vX.Y.Z`）が作られる
+4. 準備 PR をレビューして squash マージする。Release ワークフローが tag と draft Release を作り、署名済み MSIX・`.appinstaller`・公開証明書・インストールスクリプトを添付し、Release から再取得して SHA-256 を照合したうえで公開する。失敗したときは、同じ実行で「Re-run failed jobs」を使う（タグを手で切り直さない）
 
 ## License
 

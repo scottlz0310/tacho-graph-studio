@@ -124,7 +124,7 @@ Load(PDF/JPEG) → Split(円盤検出・分割) → RemoveBackground(楕円フ�
 ## 5. 配布・更新
 
 - **MSIX + `.appinstaller`**（NFR-02b）。single-project MSIX とし、CI で自己署名証明書により署名する
-- `.appinstaller` の配置先は **GitHub Releases**。CI のリリースジョブで MSIX と `.appinstaller` を Releases へ発行し、`.appinstaller` 内の更新 URL は `releases/latest/download/…` の固定 URL を指す
+- `.appinstaller` の配置先は **GitHub Releases**。リリースは release-automate 経由で行い（手動の Prepare Release → 準備 PR のマージ）、Release ワークフローが MSIX と `.appinstaller` を draft の Release へ添付・照合して公開する。`.appinstaller` 内の更新 URL は `releases/latest/download/…` の固定 URL を指す
 - 証明書インポートを含むセットアップスクリプト（PowerShell）を同梱する
 
 ## 6. CI / 品質ゲート
