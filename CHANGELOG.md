@@ -9,6 +9,7 @@
 ### Changed
 
 - CI: リリースを release-automate 経由に移行した。手動の Prepare Release が `chore(release): vX.Y.Z` の準備 PR（CHANGELOG の確定）を作り、そのマージで release.yml が draft の Release とタグを作成する。MSIX のビルド・署名、成果物の添付、Release からの再取得による SHA-256 照合を経て、Release を公開する。タグの手動 push による発行は廃止した。CHANGELOG には release-automate が要求する `## [Unreleased]` 見出しと比較リンクを追加した（#164）
+- `renovate.json` の `extends` から、中央プリセットで解除済みの非推奨プリセット（`options/automerge`・`options/schedule`・`options/security`）への参照を削除した。スケジュール・待機期間・自動マージ等は中央側で既に解除されているため更新の挙動は変わらず、Dependency Dashboard の警告表示が消える。
 
 ## [0.3.1] - 2026-09-09
 
