@@ -13,7 +13,7 @@ public sealed class TemplateItemViewModelTests
         TemplateItemViewModel item = new("Yazaki45", template);
 
         Assert.Equal(
-            ["date_year", "driver", "vehicle_no"],
+            (string[])["date_year", "driver", "vehicle_no"],
             item.Fields.Select(field => field.Name));
         Assert.False(item.IsDirty);
     }
@@ -66,7 +66,7 @@ public sealed class TemplateItemViewModelTests
 
         ChartTemplate template = item.ToChartTemplate();
 
-        Assert.Equal(["vehicle_no"], template.Fields.Keys);
+        Assert.Equal((string[])["vehicle_no"], template.Fields.Keys);
     }
 
     [Fact]

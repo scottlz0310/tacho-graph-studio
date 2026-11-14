@@ -28,7 +28,7 @@ internal sealed class FakeTemplateStore : ITemplateStore
 
         ThrowIfConfigured();
         return new TemplateStoreListResult(
-            [.. _templates
+            (StoredTemplate[])[.. _templates
                 .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(pair => new StoredTemplate(pair.Key, pair.Value))],
             ListFailures);

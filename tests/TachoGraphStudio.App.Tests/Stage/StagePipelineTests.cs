@@ -34,7 +34,7 @@ public sealed class StagePipelineTests : IDisposable
             new SheetLoader(new NotUsedPdfRasterizer()),
             imageSplitOptions: TestSplitOptions);
 
-        List<ProcessedDisc> discs = await ToListAsync(pipeline.ProcessAsync([path]));
+        List<ProcessedDisc> discs = await ToListAsync(pipeline.ProcessAsync((string[])[path]));
 
         Assert.Equal(discCount, discs.Count);
         for (int index = 0; index < discCount; index++)
@@ -58,7 +58,7 @@ public sealed class StagePipelineTests : IDisposable
             new SheetLoader(new NotUsedPdfRasterizer()),
             imageSplitOptions: TestSplitOptions);
 
-        ProcessedDisc disc = Assert.Single(await ToListAsync(pipeline.ProcessAsync([path])));
+        ProcessedDisc disc = Assert.Single(await ToListAsync(pipeline.ProcessAsync((string[])[path])));
 
         // 楕円中心は不透明(alpha=255)で BGR は元色(225 前後)のまま
         int centerOffset = (((int)disc.EllipseCenterY * disc.Width) + (int)disc.EllipseCenterX) * 4;
@@ -87,11 +87,11 @@ public sealed class StagePipelineTests : IDisposable
             new SheetLoader(new FakePdfRasterizer(pageBytes, pageCount: 2)),
             pdfSplitOptions: TestSplitOptions);
 
-        List<ProcessedDisc> discs = await ToListAsync(pipeline.ProcessAsync([path]));
+        List<ProcessedDisc> discs = await ToListAsync(pipeline.ProcessAsync((string[])[path]));
 
         Assert.Equal(4, discs.Count);
-        Assert.Equal([0, 0, 1, 1], discs.Select(disc => disc.PageIndex));
-        Assert.Equal([0, 1, 0, 1], discs.Select(disc => disc.IndexInSheet));
+        Assert.Equal((int[])[0, 0, 1, 1], discs.Select(disc => disc.PageIndex));
+        Assert.Equal((int[])[0, 1, 0, 1], discs.Select(disc => disc.IndexInSheet));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed class StagePipelineTests : IDisposable
         ImageProcessingSettings settings = new() { Threshold = 255 };
 
         await Assert.ThrowsAsync<DiscSplitException>(
-            async () => await ToListAsync(pipeline.ProcessAsync([path], settings)));
+            async () => await ToListAsync(pipeline.ProcessAsync((string[])[path], settings)));
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class StagePipelineTests : IDisposable
             ProcessingSettings = new ImageProcessingSettings { Threshold = 255 },
         };
 
-        await viewModel.ImportAsync([path]);
+        await viewModel.ImportAsync((string[])[path]);
 
         Assert.Empty(viewModel.Discs);
         Assert.True(viewModel.HasImportError);
@@ -155,7 +155,7 @@ public sealed class StagePipelineTests : IDisposable
             remover: remover);
         ImageProcessingSettings settings = new() { EllipsePaddingPx = 18 };
 
-        Assert.Single(await ToListAsync(pipeline.ProcessAsync([path], settings)));
+        Assert.Single(await ToListAsync(pipeline.ProcessAsync((string[])[path], settings)));
 
         Assert.Equal(18, remover.LastOptions?.EllipsePaddingPx);
     }
@@ -171,7 +171,7 @@ public sealed class StagePipelineTests : IDisposable
             removalOptions: new BackgroundRemovalOptions { EllipsePaddingPx = 11 },
             remover: remover);
 
-        Assert.Single(await ToListAsync(pipeline.ProcessAsync([path])));
+        Assert.Single(await ToListAsync(pipeline.ProcessAsync((string[])[path])));
 
         Assert.Equal(11, remover.LastOptions?.EllipsePaddingPx);
     }
@@ -186,7 +186,7 @@ public sealed class StagePipelineTests : IDisposable
         ImageProcessingSettings settings = new() { EllipsePaddingPx = -1_000 };
 
         BackgroundRemovalException exception = await Assert.ThrowsAsync<BackgroundRemovalException>(
-            async () => await ToListAsync(pipeline.ProcessAsync([path], settings)));
+            async () => await ToListAsync(pipeline.ProcessAsync((string[])[path], settings)));
 
         Assert.Contains("背景除去の設定", exception.Message, StringComparison.Ordinal);
     }
@@ -207,7 +207,7 @@ public sealed class StagePipelineTests : IDisposable
             pdfSplitOptions: TestSplitOptions,
             remover: new FailAfterFirstDiscRemover());
 
-        await using IAsyncEnumerator<ProcessedDisc> discs = pipeline.ProcessAsync([path]).GetAsyncEnumerator();
+        await using IAsyncEnumerator<ProcessedDisc> discs = pipeline.ProcessAsync((string[])[path]).GetAsyncEnumerator();
 
         Assert.True(await discs.MoveNextAsync());
         Assert.Equal(0, discs.Current.IndexInSheet);

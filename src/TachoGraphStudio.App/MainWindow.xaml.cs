@@ -166,7 +166,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await StageViewModel.ImportAsync([.. files.Select(file => file.Path)]);
+        await StageViewModel.ImportAsync((string[])[.. files.Select(file => file.Path)]);
     }
 
     private void OnPreviewFullscreenRequested(object? sender, EventArgs e)

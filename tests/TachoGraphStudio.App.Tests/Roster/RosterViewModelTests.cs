@@ -77,7 +77,7 @@ public sealed class RosterViewModelTests
 
         // 名簿取得成功(RefreshAsync)でも設定警告は消えない
         RosterResult result = new(
-            [new RosterEntry { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true }],
+            (RosterEntry[])[new RosterEntry { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true }],
             RosterDataSource.Remote,
             RetrievedAt);
         viewModel.SetRosterClient(new StubRosterClient(result));
@@ -133,7 +133,7 @@ public sealed class RosterViewModelTests
     public async Task RefreshAsync_SuccessPopulatesEntriesAndClearsErrorMessage()
     {
         RosterResult result = new(
-            [new RosterEntry { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true }],
+            (RosterEntry[])[new RosterEntry { ControlNumber = 100, Detail = "除雪車", IsTachoTarget = true }],
             RosterDataSource.Remote,
             RetrievedAt);
         RosterViewModel viewModel = new(new NullFilterSettingsStore());
@@ -200,7 +200,7 @@ public sealed class RosterViewModelTests
         await viewModel.RefreshAsync();
 
         // 「全て」+ 閲覧範囲を持つ業者のみ。範囲行なし(admin)は除外される
-        Assert.Equal([null, "test-vendor"], viewModel.VendorOptions.Select(option => option.Code));
+        Assert.Equal((string?[])[null, "test-vendor"], viewModel.VendorOptions.Select(option => option.Code));
         Assert.Null(viewModel.VendorWarningMessage);
     }
 
@@ -375,12 +375,12 @@ public sealed class RosterViewModelTests
     private static VendorResult CreateVendorResult()
     {
         return new VendorResult(
-            [
+            (VendorEntry[])[
                 new VendorEntry
                 {
                     Code = "test-vendor",
                     DisplayName = "テスト業者",
-                    ViewRanges = [new CtrlNumRange(100, 499)],
+                    ViewRanges = (CtrlNumRange[])[new CtrlNumRange(100, 499)],
                 },
                 new VendorEntry { Code = "admin", DisplayName = "管理者" },
             ],
