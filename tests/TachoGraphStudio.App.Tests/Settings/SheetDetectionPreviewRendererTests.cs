@@ -131,7 +131,7 @@ public sealed class SheetDetectionPreviewRendererTests : IDisposable
             imageSplitOptions: TestSplitOptions);
 
         List<ProcessedDisc> discs = [];
-        await foreach (ProcessedDisc disc in pipeline.ProcessAsync([path], settings))
+        await foreach (ProcessedDisc disc in pipeline.ProcessAsync((string[])[path], settings))
         {
             discs.Add(disc);
         }

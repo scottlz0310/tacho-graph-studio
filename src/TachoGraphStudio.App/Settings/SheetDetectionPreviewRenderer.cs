@@ -65,7 +65,7 @@ public sealed class SheetDetectionPreviewRenderer : IDetectionPreviewRenderer
             return cached;
         }
 
-        await foreach (SheetImage sheet in _sheetLoader.LoadAsync([_sourcePath], cancellationToken))
+        await foreach (SheetImage sheet in _sheetLoader.LoadAsync((string[])[_sourcePath], cancellationToken))
         {
             // プレビューは先頭シートの先頭ページのみを対象にする
             _sheet = sheet;

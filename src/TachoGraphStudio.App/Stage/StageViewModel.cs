@@ -77,7 +77,7 @@ public sealed partial class StageViewModel : ObservableObject
     public partial StoredTemplate? SelectedTemplate { get; set; }
 
     // 出力画像の選択肢。取り込み・検出は常に600dpi基準で行い、保存時だけ縮小する(#101)
-    public IReadOnlyList<int> ExportDpiOptions { get; } = [100, 200, 300, DiscComposer.DefaultDpi];
+    public IReadOnlyList<int> ExportDpiOptions { get; } = (int[])[100, 200, 300, DiscComposer.DefaultDpi];
 
     public int ExportDpi
     {
@@ -560,7 +560,7 @@ public sealed partial class StageViewModel : ObservableObject
             return;
         }
 
-        _lastImportedPaths = [.. paths];
+        _lastImportedPaths = (string[])[.. paths];
         OnPropertyChanged(nameof(CanReprocess));
         OnPropertyChanged(nameof(LastImportedSheetPath));
 

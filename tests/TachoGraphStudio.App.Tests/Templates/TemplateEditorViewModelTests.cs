@@ -15,7 +15,7 @@ public sealed class TemplateEditorViewModelTests
 
         await editor.LoadAsync();
 
-        Assert.Equal(["Task-Meter", "Yazaki45"], editor.Templates.Select(item => item.Name));
+        Assert.Equal((string[])["Task-Meter", "Yazaki45"], editor.Templates.Select(item => item.Name));
         Assert.Same(editor.Templates[0], editor.SelectedTemplate);
         Assert.False(editor.IsLoading);
         Assert.False(editor.HasError);
@@ -27,7 +27,7 @@ public sealed class TemplateEditorViewModelTests
     {
         FakeTemplateStore store = new()
         {
-            ListFailures = [new TemplateLoadFailure("broken.json", "解析できません")],
+            ListFailures = (TemplateLoadFailure[])[new TemplateLoadFailure("broken.json", "解析できません")],
         };
         TemplateEditorViewModel editor = new(store);
 
@@ -60,13 +60,13 @@ public sealed class TemplateEditorViewModelTests
         editor.CreateNew();
         editor.CreateNew();
 
-        Assert.Equal(["新規テンプレート", "新規テンプレート 2"], editor.Templates.Select(item => item.Name));
+        Assert.Equal((string[])["新規テンプレート", "新規テンプレート 2"], editor.Templates.Select(item => item.Name));
         TemplateItemViewModel selected = Assert.IsType<TemplateItemViewModel>(editor.SelectedTemplate);
         Assert.True(selected.IsDirty);
         Assert.Null(selected.Id);
         // 標準フィールドキー(#13 の名簿・日付反映が参照する)がシードされる
         Assert.Equal(
-            ["date_day", "date_month", "date_year", "driver", "vehicle_no", "vehicle_type"],
+            (string[])["date_day", "date_month", "date_year", "driver", "vehicle_no", "vehicle_type"],
             selected.Fields.Select(field => field.Name).Order(StringComparer.Ordinal));
         Assert.True(editor.HasUnsavedChanges);
     }
@@ -202,7 +202,7 @@ public sealed class TemplateEditorViewModelTests
         TemplateEditorViewModel editor = new(new FakeTemplateStore());
         await editor.LoadAsync();
 
-        int importedCount = await editor.ImportAllAsync([new TemplateImportFile("broken.json", json)]);
+        int importedCount = await editor.ImportAllAsync((TemplateImportFile[])[new TemplateImportFile("broken.json", json)]);
 
         Assert.Equal(0, importedCount);
         Assert.True(editor.HasError);
@@ -268,7 +268,7 @@ public sealed class TemplateEditorViewModelTests
     {
         FakeTemplateStore store = new()
         {
-            NextExportResult = new TemplateExportResult(1, [new TemplateLoadFailure("broken.json", "壊れています")]),
+            NextExportResult = new TemplateExportResult(1, (TemplateLoadFailure[])[new TemplateLoadFailure("broken.json", "壊れています")]),
         };
         TemplateEditorViewModel editor = new(store);
         await editor.LoadAsync();

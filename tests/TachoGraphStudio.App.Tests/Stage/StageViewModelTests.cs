@@ -244,7 +244,7 @@ public sealed class StageViewModelTests : IDisposable
         };
         StageViewModel viewModel = CreateViewModel(pipeline);
 
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
 
         Assert.Equal(discCount, viewModel.Discs.Count);
         for (int index = 0; index < discCount; index++)
@@ -270,7 +270,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         StageViewModel viewModel = CreateViewModel(new FakeStagePipeline { Discs = [BuildDisc(0)] });
 
-        await viewModel.ImportAsync([path]);
+        await viewModel.ImportAsync((string[])[path]);
 
         Assert.True(viewModel.HasImportWarning);
         Assert.Contains("PDF", viewModel.ImportWarning);
@@ -283,7 +283,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         StageViewModel viewModel = CreateViewModel(new FakeStagePipeline { Discs = [BuildDisc(0)] });
 
-        await viewModel.ImportAsync([path]);
+        await viewModel.ImportAsync((string[])[path]);
 
         Assert.False(viewModel.HasImportWarning);
         Assert.Null(viewModel.ImportWarning);
@@ -294,11 +294,11 @@ public sealed class StageViewModelTests : IDisposable
     {
         StageViewModel viewModel = CreateViewModel(new FakeStagePipeline { Discs = [BuildDisc(0)] });
 
-        await viewModel.ImportAsync(["a.pdf", "b.jpg", "c.jpeg"]);
+        await viewModel.ImportAsync((string[])["a.pdf", "b.jpg", "c.jpeg"]);
         Assert.Contains("2 件", viewModel.ImportWarning);
 
         // 取り込み直したら前回の警告は残らない
-        await viewModel.ImportAsync(["a.pdf"]);
+        await viewModel.ImportAsync((string[])["a.pdf"]);
         Assert.False(viewModel.HasImportWarning);
     }
 
@@ -312,7 +312,7 @@ public sealed class StageViewModelTests : IDisposable
         };
         StageViewModel viewModel = CreateViewModel(pipeline);
 
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
 
         Assert.Single(viewModel.Discs);
         Assert.True(viewModel.HasImportError);
@@ -330,7 +330,7 @@ public sealed class StageViewModelTests : IDisposable
         };
         StageViewModel viewModel = CreateViewModel(pipeline);
 
-        await viewModel.ImportAsync(["sheet.bmp"]);
+        await viewModel.ImportAsync((string[])["sheet.bmp"]);
 
         Assert.Empty(viewModel.Discs);
         Assert.True(viewModel.HasImportError);
@@ -342,12 +342,12 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["first.pdf"]);
+        await viewModel.ImportAsync((string[])["first.pdf"]);
         DiscWorkItem firstSelection = Assert.IsType<DiscWorkItem>(viewModel.SelectedDisc);
         viewModel.SelectedDisc = viewModel.Discs[1];
 
         pipeline.Discs = [BuildDisc(2)];
-        await viewModel.ImportAsync(["second.pdf"]);
+        await viewModel.ImportAsync((string[])["second.pdf"]);
 
         DiscWorkItem item = Assert.Single(viewModel.Discs);
         Assert.Equal(1, item.Number);
@@ -360,7 +360,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.Discs[0].RotationAngle = 45.0;
         viewModel.Discs[1].RotationAngle = -30.0;
 
@@ -388,7 +388,7 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = CreateViewModel(pipeline);
         Assert.False(viewModel.HasSelectedDisc);
 
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         Assert.True(viewModel.HasSelectedDisc);
 
         viewModel.SelectedDisc = null;
@@ -415,7 +415,7 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = CreateViewModel(pipeline);
         Assert.False(viewModel.CanReprocess);
 
-        await viewModel.ImportAsync(["first.pdf", "second.jpg"]);
+        await viewModel.ImportAsync((string[])["first.pdf", "second.jpg"]);
         viewModel.ProcessingSettings = new ImageProcessingSettings
         {
             Threshold = 12,
@@ -426,7 +426,7 @@ public sealed class StageViewModelTests : IDisposable
         await viewModel.ReprocessAsync();
 
         Assert.Equal(2, pipeline.ProcessCallCount);
-        Assert.Equal(["first.pdf", "second.jpg"], pipeline.LastPaths);
+        Assert.Equal((string[])["first.pdf", "second.jpg"], pipeline.LastPaths);
         Assert.Equal(viewModel.ProcessingSettings, pipeline.LastSettings);
         Assert.True(viewModel.CanReprocess);
     }
@@ -437,7 +437,7 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
 
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
 
         Assert.All(viewModel.Discs, disc => Assert.Equal("2026/07/19", disc.Metadata.PrintDate));
     }
@@ -457,7 +457,7 @@ public sealed class StageViewModelTests : IDisposable
         {
             FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
             StageViewModel viewModel = CreateViewModel(pipeline);
-            await viewModel.ImportAsync(["sheet.pdf"]);
+            await viewModel.ImportAsync((string[])["sheet.pdf"]);
 
             Assert.Equal("2026/07/19", viewModel.Discs[0].Metadata.PrintDate);
 
@@ -476,7 +476,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         // 個別の手修正(FR-15)は次の一括指定までは保持される
         viewModel.Discs[1].Metadata.PrintDate = "2026/01/01";
 
@@ -490,7 +490,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         // 選択切替をまたいでも、一括指定は未選択の円盤へも反映される(FR-17、アーキテクチャ §4)
         viewModel.SelectedDisc = viewModel.Discs[1];
 
@@ -510,7 +510,7 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = CreateViewModel(pipeline);
         viewModel.SkipHandwritten = true;
 
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
 
         Assert.True(viewModel.Discs[0].Metadata.SkipHandwritten);
     }
@@ -520,7 +520,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[0].Metadata.DriverName = "山田 太郎";
         List<string?> changedProperties = [];
@@ -546,7 +546,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectedDisc = viewModel.Discs[1];
 
         viewModel.ApplyRosterEntry(new RosterEntry
@@ -601,7 +601,7 @@ public sealed class StageViewModelTests : IDisposable
 
         await viewModel.LoadTemplatesAsync();
 
-        Assert.Equal(["Task-Meter", "Yazaki45"], viewModel.Templates.Select(stored => stored.Template.Name));
+        Assert.Equal((string[])["Task-Meter", "Yazaki45"], viewModel.Templates.Select(stored => stored.Template.Name));
         Assert.Same(viewModel.Templates[0], viewModel.SelectedTemplate);
         Assert.False(viewModel.HasTemplateWarning);
     }
@@ -611,7 +611,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeTemplateStore store = new()
         {
-            ListFailures = [new TemplateLoadFailure("broken.json", "解析できません")],
+            ListFailures = (TemplateLoadFailure[])[new TemplateLoadFailure("broken.json", "解析できません")],
         };
         StageViewModel viewModel = new(
             new FakeStagePipeline(), new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
@@ -708,7 +708,7 @@ public sealed class StageViewModelTests : IDisposable
         await viewModel.LoadTemplatesAsync();
 
         Assert.Equal(
-            ["Task-Meter", "Yazaki45", "EditEntry"],
+            (string[])["Task-Meter", "Yazaki45", "EditEntry"],
             viewModel.TemplateSelectionItems.Select(
                 item => item is StoredTemplate stored ? stored.Template.Name : "EditEntry"));
         Assert.Same(TemplateEditEntry.Instance, viewModel.TemplateSelectionItems[^1]);
@@ -735,7 +735,7 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = new(
             pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
         await viewModel.LoadTemplatesAsync();
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         // 円盤ごとに異なる様式を選択する(#43)
         viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
         viewModel.SelectedDisc = viewModel.Discs[1];
@@ -757,7 +757,7 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = new(
             pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
         await viewModel.LoadTemplatesAsync();
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.Discs[0].Metadata.SelectedTemplateId = "deleted-template";
 
         viewModel.SelectedDisc = null;
@@ -778,7 +778,7 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = new(
             pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
         await viewModel.LoadTemplatesAsync();
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
 
         store.NextException = new IOException("一時的な失敗");
@@ -808,7 +808,7 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = new(
             pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
         await viewModel.LoadTemplatesAsync();
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectedDisc = viewModel.Discs[0];
         viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]); // A(Discs[0]) = Yazaki45
         viewModel.SelectedDisc = viewModel.Discs[1];
@@ -844,7 +844,7 @@ public sealed class StageViewModelTests : IDisposable
         await viewModel.LoadTemplatesAsync();
         viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
 
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
 
         Assert.Equal("Yazaki45", viewModel.Discs[0].Metadata.SelectedTemplateId);
         Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
@@ -862,11 +862,11 @@ public sealed class StageViewModelTests : IDisposable
         StageViewModel viewModel = new(
             pipeline, new NullImageSourceFactory(), store, new DateOnly(2026, 7, 19));
         await viewModel.LoadTemplatesAsync();
-        await viewModel.ImportAsync(["first.pdf"]);
+        await viewModel.ImportAsync((string[])["first.pdf"]);
         viewModel.SelectTemplateForSelectedDisc(viewModel.Templates[1]);
 
         pipeline.Discs = [BuildDisc(0), BuildDisc(1)];
-        await viewModel.ImportAsync(["second.pdf"]);
+        await viewModel.ImportAsync((string[])["second.pdf"]);
 
         Assert.All(viewModel.Discs, disc => Assert.Equal("Yazaki45", disc.Metadata.SelectedTemplateId));
         Assert.Equal("Yazaki45", viewModel.SelectedTemplate?.Id);
@@ -877,7 +877,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[0].Metadata.RegistrationNumber = "旭川123-45";
@@ -907,7 +907,7 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0, sourcePath)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
         viewModel.ExportDpi = 300;
-        await viewModel.ImportAsync([sourcePath]);
+        await viewModel.ImportAsync((string[])[sourcePath]);
         viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
 
@@ -927,7 +927,7 @@ public sealed class StageViewModelTests : IDisposable
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
         viewModel.SkipHandwritten = true;
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[0].Metadata.RegistrationNumber = "旭川123-45";
         viewModel.Discs[0].Metadata.DriverName = "山田 太郎";
@@ -945,7 +945,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[1].Status = DiscStatus.Done;
@@ -962,7 +962,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0), BuildDisc(1), BuildDisc(2)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[1].Status = DiscStatus.Done;
         viewModel.Discs[2].Status = DiscStatus.Done;
@@ -982,7 +982,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
 
         bool saved = await viewModel.SaveAndAdvanceAsync();
 
@@ -996,7 +996,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectedTemplate = BuildStoredTemplate();
         // 保存先パスをディレクトリで塞ぎ、書き込みを失敗させる
         viewModel.OutputDirectory = _temporaryDirectory;
@@ -1015,7 +1015,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.OutputDirectory = _temporaryDirectory;
         int notificationCount = 0;
         viewModel.PropertyChanged += (_, e) =>
@@ -1038,7 +1038,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.OutputDirectory = _temporaryDirectory;
 
         // 様式未選択かつ手書きスキップでない場合、文字なし PNG を成功扱いで保存しない
@@ -1060,7 +1060,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         viewModel.Discs[0].Metadata.DriverName = "山田 太郎";
@@ -1081,7 +1081,7 @@ public sealed class StageViewModelTests : IDisposable
     {
         FakeStagePipeline pipeline = new() { Discs = [BuildDisc(0)] };
         StageViewModel viewModel = CreateViewModel(pipeline);
-        await viewModel.ImportAsync(["sheet.pdf"]);
+        await viewModel.ImportAsync((string[])["sheet.pdf"]);
         viewModel.SelectedTemplate = BuildStoredTemplate();
         viewModel.OutputDirectory = _temporaryDirectory;
         Directory.CreateDirectory(_temporaryDirectory);
@@ -1166,7 +1166,7 @@ public sealed class StageViewModelTests : IDisposable
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             ProcessCallCount++;
-            LastPaths = [.. paths];
+            LastPaths = (string[])[.. paths];
             LastSettings = settings;
             await Task.Yield();
             foreach (ProcessedDisc disc in Discs)
